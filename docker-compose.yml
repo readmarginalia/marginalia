@@ -1,0 +1,20 @@
+services:
+  marginalia:
+    build: .
+    ports:
+      - "9595:9595"
+    volumes:
+      - data:/data
+    environment:
+      DB_PATH: /data/marginalia.db
+      PORT: "9595"
+    secrets:
+      - token
+    restart: unless-stopped
+
+secrets:
+  token:
+    file: ./secret_token.txt
+
+volumes:
+  data:
