@@ -17,7 +17,7 @@ A self-hosted service for saving articles worth reading. Submit a URL, and Margi
 | `POST` | `/recommend?token=TOKEN` | Yes | Save a URL. Body: `{"url": "..."}` |
 | `DELETE` | `/recommend/{id}?token=TOKEN` | Yes | Delete a recommendation by ID |
 | `GET` | `/rss` | No | RSS 2.0 feed of all articles |
-| `GET` | `/list` | No | HTML page listing all articles |
+| `GET` | `/` | No | HTML page listing all articles |
 
 ## Running
 

@@ -29,7 +29,7 @@ func New(database *sql.DB, token string) http.Handler {
 	})
 
 	r.Get("/rss", handleRSS(database))
-	r.Get("/list", handleList(database))
+	r.Get("/", handleList(database))
 
 	return r
 }
