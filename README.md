@@ -48,6 +48,7 @@ go run .
 | `TOKEN` | *(required)* | Auth token for write endpoints. Also read from `/run/secrets/token`. |
 | `DB_PATH` | `data/marginalia.db` | Path to the SQLite database file |
 | `PORT` | `9595` | HTTP listen port |
+| `OWNER` | *(empty)* | Your name. Personalizes the page title and RSS feed (e.g. `OWNER=Filippos` → "Filippos' Marginalia"). |
 
 ## Project structure
 

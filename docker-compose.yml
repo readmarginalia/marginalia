@@ -8,6 +8,7 @@ services:
     environment:
       DB_PATH: /data/marginalia.db
       PORT: "9595"
+      # OWNER: Your name
     secrets:
       - token
     restart: unless-stopped

@@ -19,7 +19,18 @@ import (
 	"marginalia/feed"
 )
 
-func New(database *sql.DB, token string) http.Handler {
+func ownerTitle(owner string) string {
+	if owner == "" {
+		return "Marginalia"
+	}
+	if owner[len(owner)-1] == 's' || owner[len(owner)-1] == 'S' {
+		return owner + "' Marginalia"
+	}
+	return owner + "'s Marginalia"
+}
+
+func New(database *sql.DB, token string, owner string) http.Handler {
+	title := ownerTitle(owner)
 	r := chi.NewRouter()
 
 	r.Use(func(next http.Handler) http.Handler {
@@ -40,8 +51,8 @@ func New(database *sql.DB, token string) http.Handler {
 		r.Delete("/recommend/{id}", handleDelete(database))
 	})
 
-	r.Get("/rss", handleRSS(database))
-	r.Get("/", handleList(database))
+	r.Get("/rss", handleRSS(database, owner, title))
+	r.Get("/", handleList(database, title))
 
 	return r
 }
@@ -113,7 +124,7 @@ func handleDelete(database *sql.DB) http.HandlerFunc {
 	}
 }
 
-func handleRSS(database *sql.DB) http.HandlerFunc {
+func handleRSS(database *sql.DB, owner, title string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		recs, err := db.All(database)
 		if err != nil {
@@ -121,7 +132,7 @@ func handleRSS(database *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		data, err := feed.Render(recs)
+		data, err := feed.Render(recs, owner)
 		if err != nil {
 			jsonError(w, fmt.Sprintf("feed error: %v", err), http.StatusInternalServerError)
 			return
@@ -166,7 +177,8 @@ var listTmpl = template.Must(template.New("list").Parse(`<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Marginalia</title>
+<title>{{.Title}}</title>
+<link rel="alternate" type="application/rss+xml" title="{{.Title}}" href="/rss">
 <style>
   body { font-family: system-ui, sans-serif; max-width: 700px; margin: 2rem auto; padding: 0 1rem; color: #222; }
   h1 { font-size: 1.5rem; }
@@ -178,9 +190,9 @@ var listTmpl = template.Must(template.New("list").Parse(`<!DOCTYPE html>
 </style>
 </head>
 <body>
-<h1>Marginalia</h1>
+<h1>{{.Title}}</h1>
 <ul>
-{{range .}}<li>
+{{range .Items}}<li>
   <a href="{{.URL}}">{{.Title}}</a>
   <div class="meta">{{if .Byline}}by {{.Byline}}{{end}}{{if and .Byline .SiteName}} · {{end}}{{.SiteName}}{{if or .Byline .SiteName}} · {{end}}{{.AddedAtFmt}}</div>
 </li>
@@ -189,15 +201,20 @@ var listTmpl = template.Must(template.New("list").Parse(`<!DOCTYPE html>
 </body>
 </html>`))
 
+type listPage struct {
+	Title string
+	Items []listItem
+}
+
 type listItem struct {
-	URL       string
-	Title     string
-	Byline    string
-	SiteName  string
+	URL        string
+	Title      string
+	Byline     string
+	SiteName   string
 	AddedAtFmt string
 }
 
-func handleList(database *sql.DB) http.HandlerFunc {
+func handleList(database *sql.DB, title string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		recs, err := db.All(database)
 		if err != nil {
@@ -217,7 +234,7 @@ func handleList(database *sql.DB) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		listTmpl.Execute(w, items)
+		listTmpl.Execute(w, listPage{Title: title, Items: items})
 	}
 }
 

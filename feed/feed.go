@@ -31,7 +31,7 @@ type Item struct {
 	GUID           string `xml:"guid"`
 }
 
-func Render(recs []db.Recommendation) ([]byte, error) {
+func Render(recs []db.Recommendation, owner string) ([]byte, error) {
 	items := make([]Item, len(recs))
 	for i, r := range recs {
 		items[i] = Item{
@@ -45,12 +45,23 @@ func Render(recs []db.Recommendation) ([]byte, error) {
 		}
 	}
 
+	title := "Marginalia"
+	desc := "Articles worth reading"
+	if owner != "" {
+		if owner[len(owner)-1] == 's' || owner[len(owner)-1] == 'S' {
+			title = owner + "' Marginalia"
+		} else {
+			title = owner + "'s Marginalia"
+		}
+		desc = "Articles worth reading, recommended by " + owner
+	}
+
 	rss := RSS{
 		Version:   "2.0",
 		ContentNS: "http://purl.org/rss/1.0/modules/content/",
 		Channel: Channel{
-			Title:       "Marginalia",
-			Description: "Articles worth reading",
+			Title:       title,
+			Description: desc,
 			Items:       items,
 		},
 	}

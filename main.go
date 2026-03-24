@@ -21,6 +21,8 @@ func main() {
 		log.Fatal("TOKEN is required (env var or /run/secrets/token)")
 	}
 
+	owner := os.Getenv("OWNER")
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "9595"
@@ -37,7 +39,7 @@ func main() {
 	}
 	defer database.Close()
 
-	srv := server.New(database, token)
+	srv := server.New(database, token, owner)
 
 	log.Printf("marginalia listening on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, srv))
