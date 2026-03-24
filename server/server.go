@@ -22,6 +22,18 @@ import (
 func New(database *sql.DB, token string) http.Handler {
 	r := chi.NewRouter()
 
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
+
 	r.Group(func(r chi.Router) {
 		r.Use(tokenAuth(token))
 		r.Post("/recommend", handleAdd(database))
