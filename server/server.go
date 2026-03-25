@@ -180,17 +180,64 @@ var listTmpl = template.Must(template.New("list").Parse(`<!DOCTYPE html>
 <title>{{.Title}}</title>
 <link rel="alternate" type="application/rss+xml" title="{{.Title}}" href="/rss">
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 700px; margin: 2rem auto; padding: 0 1rem; color: #222; }
-  h1 { font-size: 1.5rem; }
-  ul { list-style: none; padding: 0; }
-  li { margin-bottom: 1.2rem; padding-bottom: 1.2rem; border-bottom: 1px solid #eee; }
-  a { color: #1a0dab; text-decoration: none; font-weight: 600; }
-  a:hover { text-decoration: underline; }
-  .meta { color: #666; font-size: 0.85rem; margin-top: 0.2rem; }
+  :root { color-scheme: light dark; }
+  body {
+    font-family: system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.55;
+    letter-spacing: -0.003em;
+    font-kerning: normal;
+    text-rendering: optimizeLegibility;
+    max-width: 700px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+    background: #fff;
+    color: #111;
+  }
+  header { display: flex; align-items: baseline; justify-content: space-between; }
+  h1 { font-size: 1.6rem; line-height: 1.2; margin-bottom: 0.3em; }
+  .rss-link { color: #666; font-size: 0.85em; text-decoration: none; font-weight: normal; display: inline-flex; align-items: center; gap: 0.3em; }
+  .rss-link:hover { color: #1a4fd8; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { margin-bottom: 0; padding: 0.85em 0; border-bottom: 1px solid #e3e3e3; }
+  li:last-child { border-bottom: none; padding-bottom: 0; }
+  a { color: #1a4fd8; text-decoration: none; font-weight: 600; }
+  a:visited { color: #1a4fd8; }
+  a:hover { color: #0f3fb5; }
+  a:active { color: #0c3290; }
+  .meta { color: #666; font-size: 0.85em; margin-top: 0.2em; }
+  footer {
+    margin-top: 1em;
+    padding-top: 1em;
+    border-top: 1px solid #e3e3e3;
+    font-size: 0.85em;
+    color: #666;
+  }
+  footer a, footer a:visited, footer a:hover, footer a:active {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.12em;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #111; color: #eee; }
+    li { border-bottom-color: #333; }
+    .meta { color: #aaa; }
+    a { color: #7aa2ff; }
+    a:visited { color: #7aa2ff; }
+    a:hover { color: #9db8ff; }
+    a:active { color: #5f86e8; }
+    footer { border-top-color: #333; color: #aaa; }
+  }
+  @media (max-width: 700px) {
+    body { font-size: 18px; line-height: 1.56; }
+  }
 </style>
 </head>
 <body>
-<h1>{{.Title}}</h1>
+<header>
+  <h1>{{.Title}}</h1>
+  <a class="rss-link" href="/rss" title="RSS Feed"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 256 256" fill="currentColor"><circle cx="68" cy="189" r="28"/><path d="M160 213h-34a89 89 0 0 0-89-89V90a123 123 0 0 1 123 123z"/><path d="M224 213h-34a157 157 0 0 0-157-157V22a191 191 0 0 1 191 191z"/></svg> RSS</a>
+</header>
 <ul>
 {{range .Items}}<li>
   <a href="{{.URL}}">{{.Title}}</a>
@@ -198,6 +245,9 @@ var listTmpl = template.Must(template.New("list").Parse(`<!DOCTYPE html>
 </li>
 {{else}}<li>No recommendations yet.</li>
 {{end}}</ul>
+<footer>
+  <a href="/rss">RSS Feed</a>
+</footer>
 </body>
 </html>`))
 

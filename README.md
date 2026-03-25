@@ -12,12 +12,39 @@ A self-hosted service for saving articles worth reading. Submit a URL, and Margi
 
 ## API
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `POST` | `/recommend?token=TOKEN` | Yes | Save a URL. Body: `{"url": "..."}` |
-| `DELETE` | `/recommend/{id}?token=TOKEN` | Yes | Delete a recommendation by ID |
-| `GET` | `/rss` | No | RSS 2.0 feed of all articles |
-| `GET` | `/` | No | HTML page listing all articles |
+### Add a recommendation
+
+```sh
+curl -X POST 'https://marginalia.yourdomain.com/recommend?token=TOKEN' \
+  -H 'Content-Type: application/json' \
+  -d '{"url": "https://example.com/article"}'
+```
+
+Returns `201` with `{"id": 1, "title": "Article Title"}`.
+
+### Delete a recommendation
+
+```sh
+curl -X DELETE 'https://marginalia.yourdomain.com/recommend/1?token=TOKEN'
+```
+
+Returns `204` on success, `404` if not found.
+
+### RSS feed
+
+```
+GET /rss
+```
+
+Returns RSS 2.0 XML. Supports `If-None-Match` and `If-Modified-Since` for conditional requests.
+
+### HTML page
+
+```
+GET /
+```
+
+Browsable list of all recommendations.
 
 ## Running
 
@@ -49,6 +76,16 @@ go run .
 | `DB_PATH` | `data/marginalia.db` | Path to the SQLite database file |
 | `PORT` | `9595` | HTTP listen port |
 | `OWNER` | *(empty)* | Your name. Personalizes the page title and RSS feed (e.g. `OWNER=Filippos` → "Filippos' Marginalia"). |
+
+## Bookmarklet
+
+You can add a browser bookmarklet to quickly save the current page to Marginalia. Create a new bookmark and set the URL to:
+
+```
+javascript:(function(){fetch('https://marginalia.yourdomain.com/recommend?token=TOKEN',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:location.href})}).then(r=>r.text().then(t=>alert(r.ok?'✓ Recommended!\n'+t:'Error: '+r.status+'\n'+t))).catch(e=>alert('Failed: '+e.message))})();
+```
+
+Replace `marginalia.yourdomain.com` with your instance's hostname and `TOKEN` with your auth token.
 
 ## Project structure
 
