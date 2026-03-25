@@ -87,6 +87,10 @@ javascript:(function(){fetch('https://marginalia.yourdomain.com/recommend?token=
 
 Replace `marginalia.yourdomain.com` with your instance's hostname and `TOKEN` with your auth token.
 
+## Apple Shortcut
+
+Use this [Shortcut template](https://www.icloud.com/shortcuts/949e3162cbca41d1b7c8968a226b3be2) to save pages to Marginalia from the iOS/macOS share sheet. After installing, replace the URL and token with your own.
+
 ## Project structure
 
 ```
