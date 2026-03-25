@@ -65,6 +65,7 @@ The service will be available on port 9595.
 export TOKEN="your-secret-token"
 export DB_PATH="data/marginalia.db"  # optional, this is the default
 export PORT="9595"                   # optional, this is the default
+export THEME="terminal"              # optional, this is the default
 go run .
 ```
 
@@ -76,6 +77,7 @@ go run .
 | `DB_PATH` | `data/marginalia.db` | Path to the SQLite database file |
 | `PORT` | `9595` | HTTP listen port |
 | `OWNER` | *(empty)* | Your name. Personalizes the page title and RSS feed (e.g. `OWNER=Filippos` → "Filippos' Marginalia"). |
+| `THEME` | `terminal` | Visual theme for the HTML page. Options: `terminal`, `classic`, `modern`, `daily`, `raw`, `win`. |
 
 ## Bookmarklet
 
@@ -96,6 +98,7 @@ Use this [Shortcut template](https://www.icloud.com/shortcuts/949e3162cbca41d1b7
 ```
 main.go          — entrypoint
 server/          — HTTP routes and handlers
+server/themes/   — CSS theme files (classic, terminal, modern, daily, raw, win)
 db/              — SQLite schema, queries
 extract/         — article extraction from URLs
 feed/            — RSS 2.0 rendering

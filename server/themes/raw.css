@@ -1,0 +1,32 @@
+:root {
+  color-scheme: light dark;
+  --font: "Courier New", "Times New Roman", serif;
+  --fs: 16px;
+  --bg: #E0E0E0; --fg: #000000; --heading: #000000;
+  --link: #0000FF; --visited: #551A8B; --hover: #0000FF; --active: #FF0000;
+  --meta: #000000; --border: #000000;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #000000; --fg: #FFFFFF; --heading: #FFFFFF;
+  --link: #4DA3FF; --visited: #B48EAD; --hover: #82CFFF; --active: #FF5555;
+  --meta: #FFFFFF; --border: #FFFFFF;
+}}
+
+body { max-width: none; margin: 0; padding: 8px; line-height: 1.4; }
+header { display: block; margin-bottom: 8px; }
+h1 {
+  font-size: 1.1rem; font-weight: normal; text-transform: uppercase;
+  margin-bottom: 4px;
+  background: #000; color: #E0E0E0; display: inline-block; padding: 0 10px;
+}
+hr { display: block; border: none; border-top: 2px solid var(--border); margin: 6px 0 10px 0; }
+.rss-link { font-size: 0.75em; }
+a { text-decoration: underline; font-weight: normal; }
+ul { margin: 0; }
+li { border: 1px solid #000; margin-bottom: -1px; padding: 5px; position: relative; }
+li:nth-child(odd) { margin-left: 0px; }
+li:nth-child(even) { margin-left: 12px; }
+li:nth-child(3n) { margin-left: 4px; }
+li:nth-child(5n) { transform: translateX(-2px); }
+.meta { font-size: 0.75em; margin-left: 6px; }
+footer { margin-top: 12px; padding-top: 6px; border-top: 2px solid var(--border); font-size: 0.75em; }

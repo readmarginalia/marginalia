@@ -1,0 +1,25 @@
+:root {
+  color-scheme: dark light;
+  --font: "SF Mono", "Menlo", "Consolas", "Liberation Mono", monospace;
+  --fs: 14px;
+  --bg: #1a1a1a; --fg: #b0b0b0; --heading: #d0d0d0;
+  --link: #e8a735; --visited: #e8a735; --hover: #f0be50; --active: #a87520;
+  --meta: #666; --border: #333;
+}
+@media (prefers-color-scheme: light) { :root {
+  --bg: #faf8f5; --fg: #555; --heading: #333;
+  --link: #c07b10; --visited: #c07b10; --hover: #d98e20; --active: #8a5a06;
+  --meta: #999; --border: #ddd;
+}}
+
+h1 { font-size: 1rem; letter-spacing: 0.04em; text-transform: uppercase; }
+header { padding-bottom: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+hr { display: none; }
+a { text-decoration: none; font-weight: 600; }
+a:hover { text-decoration: underline; text-underline-offset: 0.15em; }
+li { padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
+li:last-child { border-bottom: none; }
+.rss-link, .rss-link:visited { color: #777; font-weight: normal; transition: color 0.15s; }
+.rss-link:hover { color: var(--link); }
+footer a, footer a:visited { color: #777; text-decoration: none; }
+footer a:hover { color: var(--link); }

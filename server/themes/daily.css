@@ -1,0 +1,22 @@
+:root {
+  color-scheme: light dark;
+  --font: "Georgia", "Times New Roman", serif;
+  --fs: 17px;
+  --bg: #FAF8F3; --fg: #1A1A1A; --heading: #0A0A0A;
+  --link: #111111; --visited: #111111; --hover: #000000; --active: #000000;
+  --meta: #6F6F6F; --border: #D8D2C8;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #1C1A18; --fg: #E8E3DC; --heading: #FFFFFF;
+  --link: #F5F5F5; --visited: #F5F5F5; --hover: #FFFFFF; --active: #DDDDDD;
+  --meta: #A8A29E; --border: #3A3632;
+}}
+
+body { max-width: 680px; line-height: 1.7; }
+h1 { font-weight: 700; font-size: 1.8rem; letter-spacing: -0.01em; }
+a { text-decoration: none; }
+a:hover { text-decoration: underline; }
+li { padding: 0.5rem 0; }
+.meta { font-size: 0.8em; font-style: italic; }
+footer { font-size: 0.8em; }
+footer a { color: var(--meta); }

@@ -1,0 +1,13 @@
+:root {
+  color-scheme: light dark;
+  --font: "Times New Roman", "Georgia", serif;
+  --fs: 16px;
+  --bg: #fff; --fg: #000; --heading: #000;
+  --link: #0000ee; --visited: #551a8b; --hover: #0000ee; --active: #ee0000;
+  --meta: #666; --border: #999;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #1a1a1a; --fg: #ccc; --heading: #ddd;
+  --link: #6699ff; --visited: #b07cd8; --hover: #6699ff; --active: #ff6666;
+  --meta: #888; --border: #444;
+}}

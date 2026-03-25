@@ -22,6 +22,12 @@ func main() {
 	}
 
 	owner := os.Getenv("OWNER")
+	themeName := os.Getenv("THEME")
+
+	theme, err := server.LoadTheme(themeName)
+	if err != nil {
+		log.Fatalf("failed to load theme: %v", err)
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -39,7 +45,7 @@ func main() {
 	}
 	defer database.Close()
 
-	srv := server.New(database, token, owner)
+	srv := server.New(database, token, owner, theme)
 
 	log.Printf("marginalia listening on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, srv))
