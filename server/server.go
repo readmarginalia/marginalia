@@ -29,14 +29,20 @@ func ownerTitle(owner string) string {
 	return owner + "'s Marginalia"
 }
 
-func New(database *sql.DB, token string, owner string, theme string) http.Handler {
+func New(database *sql.DB, auth AuthConfig, owner string, theme string) http.Handler {
+	auth = auth.withDefaults()
+	var limiter *failedAuthLimiter
+	if auth.EnableRateLimit {
+		limiter = newFailedAuthLimiter(defaultAuthFailureLimit, defaultAuthFailureWindow, defaultAuthBlockDuration)
+	}
+
 	title := ownerTitle(owner)
 	r := chi.NewRouter()
 
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
 				return
@@ -46,7 +52,7 @@ func New(database *sql.DB, token string, owner string, theme string) http.Handle
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(tokenAuth(token))
+		r.Use(tokenAuth(auth, limiter))
 		r.Post("/recommend", handleAdd(database))
 		r.Delete("/recommend/{id}", handleDelete(database))
 	})
@@ -55,18 +61,6 @@ func New(database *sql.DB, token string, owner string, theme string) http.Handle
 	r.Get("/", handleList(database, title, theme))
 
 	return r
-}
-
-func tokenAuth(token string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Query().Get("token") != token {
-				jsonError(w, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
 }
 
 func handleAdd(database *sql.DB) http.HandlerFunc {
