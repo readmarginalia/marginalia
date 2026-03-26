@@ -45,8 +45,20 @@ func main() {
 	}
 	defer database.Close()
 
-	srv := server.New(database, token, owner, theme)
+	auth := server.AuthConfig{
+		Token:              token,
+		EnableRateLimit:    envBool("AUTH_RATE_LIMIT"),
+		TrustProxy:         envBool("TRUST_PROXY"),
+		RealIPHeaders:      envList("REAL_IP_HEADERS"),
+		TrustedProxyRanges: mustParseTrustedProxyRanges(envList("TRUSTED_PROXIES")),
+	}
 
-	log.Printf("marginalia listening on :%s", port)
+	if auth.TrustProxy && len(auth.TrustedProxyRanges) == 0 {
+		log.Println("WARNING: TRUST_PROXY is enabled but TRUSTED_PROXIES is empty — all peers are trusted to set client IP headers")
+	}
+
+	srv := server.New(database, auth, owner, theme)
+
+	log.Printf("marginalia listening on :%s (rate_limit=%t trust_proxy=%t)", port, auth.EnableRateLimit, auth.TrustProxy)
 	log.Fatal(http.ListenAndServe(":"+port, srv))
 }
