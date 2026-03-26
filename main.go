@@ -4,7 +4,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 
 	"marginalia/db"
 	"marginalia/server"
@@ -13,12 +12,7 @@ import (
 func main() {
 	token := os.Getenv("TOKEN")
 	if token == "" {
-		if b, err := os.ReadFile("/run/secrets/token"); err == nil {
-			token = strings.TrimSpace(string(b))
-		}
-	}
-	if token == "" {
-		log.Fatal("TOKEN is required (env var or /run/secrets/token)")
+		log.Fatal("TOKEN is required")
 	}
 
 	owner := os.Getenv("OWNER")

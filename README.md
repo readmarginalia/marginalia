@@ -53,34 +53,44 @@ Browsable list of all recommendations.
 
 ## Running
 
-### With Docker Compose
+### Setup
 
-1. Put your auth token in `secret_token.txt`
-2. Run:
+1. Copy the example env file and set your values:
+
+```sh
+cp .env.example .env
+```
+
+Open `.env` and set at minimum:
+
+```
+TOKEN=your-secret-token
+```
+
+All other values have sensible defaults. See the [Configuration](#configuration) section for details.
+
+### With Docker Compose
 
 ```sh
 docker compose up -d
 ```
 
-The service will be available on port 9595.
+Docker Compose loads `.env` automatically — no extra steps needed. The service will be available on the port configured in `.env` (default `9595`).
 
 ### Without Docker
 
 ```sh
-export TOKEN="your-secret-token"
-export DB_PATH="data/marginalia.db"  # optional, this is the default
-export PORT="9595"                   # optional, this is the default
-export THEME="terminal"              # optional, this is the default
+set -a && source .env && set +a
 go run .
 ```
 
-An example environment file with all supported options is available at [.env.example](.env.example). The app does not load dotenv files automatically, so source it in your shell or have your process manager or Compose file provide the variables.
+Or export variables individually. The app does not load dotenv files automatically, so source it in your shell or have your process manager provide the variables.
 
 ## Configuration
 
 | Env var | Default | Description |
 |---------|---------|-------------|
-| `TOKEN` | *(required)* | Auth token for write endpoints. Also read from `/run/secrets/token`. |
+| `TOKEN` | *(required)* | Auth token for write endpoints. |
 | `DB_PATH` | `data/marginalia.db` | Path to the SQLite database file |
 | `PORT` | `9595` | HTTP listen port |
 | `OWNER` | *(empty)* | Your name. Personalizes the page title and RSS feed (e.g. `OWNER=Filippos` → "Filippos' Marginalia"). |
@@ -125,7 +135,7 @@ This bookmarklet sends an `Authorization` header cross-origin. The built-in CORS
 
 ## Apple Shortcut
 
-Use this [Shortcut template](https://www.icloud.com/shortcuts/949e3162cbca41d1b7c8968a226b3be2) to save pages to Marginalia from the iOS/macOS share sheet. After installing, replace the URL and set the request's `Authorization` header to `Bearer TOKEN`.
+Use this [Shortcut template](https://www.icloud.com/shortcuts/13467912537d4c1687b8b66bedc591fd) to save pages to Marginalia from the iOS/macOS share sheet. After installing, replace the URL and set the request's `Authorization` header to `Bearer TOKEN`.
 
 ## Project structure
 

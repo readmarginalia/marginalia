@@ -1,2 +1,4 @@
 secret_token.txt
 data/marginalia.db
+.env
+.DS_Store

@@ -2,20 +2,11 @@ services:
   marginalia:
     build: .
     ports:
-      - "9595:9595"
+      - "${PORT}:${PORT}"
     volumes:
       - data:/data
-    environment:
-      DB_PATH: /data/marginalia.db
-      PORT: "9595"
-      # OWNER: Your name
-    secrets:
-      - token
+    env_file: .env
     restart: unless-stopped
-
-secrets:
-  token:
-    file: ./secret_token.txt
 
 volumes:
   data:
