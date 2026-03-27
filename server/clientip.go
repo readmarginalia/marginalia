@@ -2,8 +2,8 @@ package server
 
 import (
 	"log"
-	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 )
 
@@ -15,7 +15,7 @@ type AuthConfig struct {
 	EnableRateLimit    bool
 	TrustProxy         bool
 	RealIPHeaders      []string
-	TrustedProxyRanges []*net.IPNet
+	TrustedProxyRanges []netip.Prefix
 }
 
 func (cfg AuthConfig) withDefaults() AuthConfig {
@@ -29,19 +29,19 @@ func (cfg AuthConfig) clientIdentity(r *http.Request) (string, bool) {
 	peer := remoteHost(r.RemoteAddr)
 	if cfg.usesTrustedProxy(peer) {
 		for _, header := range cfg.RealIPHeaders {
-			if clientIP := forwardedClientIP(header, r.Header.Get(header), cfg.TrustedProxyRanges); clientIP != "" {
-				return clientIP, true
+			if clientIP := forwardedClientIP(header, r.Header.Get(header), cfg.TrustedProxyRanges); clientIP.IsValid() {
+				return clientIP.String(), true
 			}
 		}
-		log.Printf("proxy warning: peer=%s is trusted but no valid client IP found in headers %v, falling back to peer address", peer, cfg.RealIPHeaders)
+		log.Printf("proxy warning: peer %s is trusted but no valid client IP found in headers %v, falling back to peer address", r.RemoteAddr, cfg.RealIPHeaders)
 	}
-	if peer != "" {
-		return peer, false
+	if peer.IsValid() {
+		return peer.String(), false
 	}
 	return strings.TrimSpace(r.RemoteAddr), false
 }
 
-func (cfg AuthConfig) usesTrustedProxy(peer string) bool {
+func (cfg AuthConfig) usesTrustedProxy(peer netip.Addr) bool {
 	if !cfg.TrustProxy {
 		return false
 	}
@@ -51,30 +51,29 @@ func (cfg AuthConfig) usesTrustedProxy(peer string) bool {
 	return isTrustedIP(peer, cfg.TrustedProxyRanges)
 }
 
-func remoteHost(remoteAddr string) string {
+func remoteHost(remoteAddr string) netip.Addr {
 	host := strings.TrimSpace(remoteAddr)
-	if splitHost, _, err := net.SplitHostPort(host); err == nil {
-		host = splitHost
+	if ap, err := netip.ParseAddrPort(host); err == nil {
+		return ap.Addr().Unmap()
 	}
-	host = strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
-	if ip := net.ParseIP(host); ip != nil {
-		return ip.String()
+	if addr, err := netip.ParseAddr(host); err == nil {
+		return addr.Unmap()
 	}
-	return host
+	return netip.Addr{}
 }
 
-func forwardedClientIP(header string, value string, trustedRanges []*net.IPNet) string {
+func forwardedClientIP(header string, value string, trustedRanges []netip.Prefix) netip.Addr {
 	candidate := strings.TrimSpace(value)
 	if candidate == "" {
-		return ""
+		return netip.Addr{}
 	}
 	if strings.EqualFold(header, "X-Forwarded-For") {
 		parts := strings.Split(candidate, ",")
 		// Walk right-to-left: skip entries matching trusted proxy ranges,
 		// return the rightmost untrusted entry (the real client IP).
 		for i := len(parts) - 1; i >= 0; i-- {
-			entry := parseIPFromForwardedEntry(strings.TrimSpace(parts[i]))
-			if entry == "" {
+			entry := remoteHost(strings.TrimSpace(parts[i]))
+			if !entry.IsValid() {
 				continue
 			}
 			if isTrustedIP(entry, trustedRanges) {
@@ -82,32 +81,15 @@ func forwardedClientIP(header string, value string, trustedRanges []*net.IPNet) 
 			}
 			return entry
 		}
-		return ""
+		return netip.Addr{}
 	}
-	return parseIPFromForwardedEntry(candidate)
+	return remoteHost(candidate)
 }
 
-func parseIPFromForwardedEntry(entry string) string {
-	if host, _, err := net.SplitHostPort(entry); err == nil {
-		entry = host
-	}
-	entry = strings.TrimPrefix(strings.TrimSuffix(entry, "]"), "[")
-	if ip := net.ParseIP(entry); ip != nil {
-		return ip.String()
-	}
-	return ""
-}
 
-func isTrustedIP(ipStr string, trustedRanges []*net.IPNet) bool {
-	if len(trustedRanges) == 0 {
-		return false
-	}
-	ip := net.ParseIP(ipStr)
-	if ip == nil {
-		return false
-	}
-	for _, cidr := range trustedRanges {
-		if cidr.Contains(ip) {
+func isTrustedIP(addr netip.Addr, prefixes []netip.Prefix) bool {
+	for _, prefix := range prefixes {
+		if prefix.Contains(addr) {
 			return true
 		}
 	}

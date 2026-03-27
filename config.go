@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-	"net"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -36,22 +36,23 @@ func envList(name string) []string {
 	return items
 }
 
-func mustParseTrustedProxyRanges(values []string) []*net.IPNet {
-	ranges := make([]*net.IPNet, 0, len(values))
+func mustParseTrustedProxyRanges(values []string) []netip.Prefix {
+	prefixes := make([]netip.Prefix, 0, len(values))
 	for _, value := range values {
-		if ip := net.ParseIP(value); ip != nil {
-			maskBits := 32
-			if ip.To4() == nil {
-				maskBits = 128
-			}
-			ranges = append(ranges, &net.IPNet{IP: ip, Mask: net.CIDRMask(maskBits, maskBits)})
+		if addr, err := netip.ParseAddr(value); err == nil {
+			addr = addr.Unmap()
+			prefixes = append(prefixes, netip.PrefixFrom(addr, addr.BitLen()))
 			continue
 		}
-		_, network, err := net.ParseCIDR(value)
+		prefix, err := netip.ParsePrefix(value)
 		if err != nil {
 			log.Fatalf("invalid TRUSTED_PROXIES entry %q: %v", value, err)
 		}
-		ranges = append(ranges, network)
+		prefix = prefix.Masked()
+		if prefix.Addr().Is4In6() {
+			prefix = netip.PrefixFrom(prefix.Addr().Unmap(), prefix.Bits()-96)
+		}
+		prefixes = append(prefixes, prefix)
 	}
-	return ranges
+	return prefixes
 }
