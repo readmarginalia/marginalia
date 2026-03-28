@@ -17,7 +17,6 @@ type Recommendation struct {
 	Excerpt  string `json:"excerpt"`
 	Content  string `json:"content"`
 	SiteName string `json:"site_name"`
-	CacheURL *string `json:"cache_url"`
 	AddedAt  int64  `json:"added_at"`
 }
 
@@ -48,8 +47,6 @@ func Open(dbPath string) (*sql.DB, error) {
 
 	// migrate: add content column if missing
 	db.Exec(`ALTER TABLE recommendations ADD COLUMN content TEXT`)
-	// migrate: add cache_url column if missing
-	db.Exec(`ALTER TABLE recommendations ADD COLUMN cache_url TEXT`)
 
 	return db, nil
 }
@@ -81,7 +78,7 @@ func Delete(db *sql.DB, id int64) (bool, error) {
 }
 
 func All(db *sql.DB) ([]Recommendation, error) {
-	rows, err := db.Query(`SELECT id, url, title, byline, excerpt, content, site_name, cache_url, added_at FROM recommendations ORDER BY added_at DESC`)
+	rows, err := db.Query(`SELECT id, url, title, byline, excerpt, content, site_name, added_at FROM recommendations ORDER BY added_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -90,15 +87,10 @@ func All(db *sql.DB) ([]Recommendation, error) {
 	var recs []Recommendation
 	for rows.Next() {
 		var r Recommendation
-		if err := rows.Scan(&r.ID, &r.URL, &r.Title, &r.Byline, &r.Excerpt, &r.Content, &r.SiteName, &r.CacheURL, &r.AddedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.URL, &r.Title, &r.Byline, &r.Excerpt, &r.Content, &r.SiteName, &r.AddedAt); err != nil {
 			return nil, err
 		}
 		recs = append(recs, r)
 	}
 	return recs, rows.Err()
-}
-
-func SetCacheURL(db *sql.DB, id int64, cacheURL string) error {
-	_, err := db.Exec(`UPDATE recommendations SET cache_url = ? WHERE id = ?`, cacheURL, id)
-	return err
 }

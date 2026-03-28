@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"marginalia/db"
+	"marginalia/wayback"
 )
 
 type RSS struct {
@@ -24,13 +25,13 @@ type Channel struct {
 }
 
 type Item struct {
-	Title          string     `xml:"title"`
-	Link           string     `xml:"link"`
-	Description    string     `xml:"description"`
-	ContentEncoded string     `xml:"content:encoded"`
-	Author         string     `xml:"author,omitempty"`
-	PubDate        string     `xml:"pubDate"`
-	GUID           string     `xml:"guid"`
+	Title          string `xml:"title"`
+	Link           string `xml:"link"`
+	Description    string `xml:"description"`
+	ContentEncoded string `xml:"content:encoded"`
+	Author         string `xml:"author,omitempty"`
+	PubDate        string `xml:"pubDate"`
+	GUID           string `xml:"guid"`
 	CacheLink      *AtomLink  `xml:"atom:link,omitempty"`
 }
 
@@ -42,18 +43,17 @@ type AtomLink struct {
 func Render(recs []db.Recommendation, owner string) ([]byte, error) {
 	items := make([]Item, len(recs))
 	for i, r := range recs {
+		addedAt := time.Unix(r.AddedAt, 0).UTC()
+		cacheURL := wayback.URL(addedAt, r.URL)
 		items[i] = Item{
 			Title:          r.Title,
 			Link:           r.URL,
 			Description:    r.Excerpt,
-			ContentEncoded: r.Content,
+			ContentEncoded: r.Content + `<br><hr><p><i><a href="` + html.EscapeString(cacheURL) + `">View Archived Snapshot</a></i></p>`,
 			Author:         r.Byline,
-			PubDate:        time.Unix(r.AddedAt, 0).UTC().Format(time.RFC1123Z),
+			PubDate:        addedAt.Format(time.RFC1123Z),
 			GUID:           r.URL,
-		}
-		if r.CacheURL != nil {
-			items[i].CacheLink = &AtomLink{Rel: "related", Href: *r.CacheURL}
-			items[i].ContentEncoded += `<br><hr><p><i><a href="` + html.EscapeString(*r.CacheURL) + `">View Archived Snapshot</a></i></p>`
+			CacheLink:      &AtomLink{Rel: "related", Href: cacheURL},
 		}
 	}
 

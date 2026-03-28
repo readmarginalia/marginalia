@@ -90,17 +90,13 @@ func handleAdd(database *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		cacheURL := wayback.ArchiveURL(body.URL)
 		wayback.RequestSave(body.URL)
-		if err := db.SetCacheURL(database, id, cacheURL); err != nil {
-			log.Printf("failed to set cache_url for %d: %v", id, err)
-		}
 
 		log.Printf("added: %s — %s", body.URL, article.Title)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{"id": id, "title": article.Title, "cache_url": cacheURL})
+		json.NewEncoder(w).Encode(map[string]any{"id": id, "title": article.Title})
 	}
 }
 
@@ -193,7 +189,7 @@ var listTmpl = template.Must(template.New("list").Parse(`<!DOCTYPE html>
 <ul>
 {{range .Items}}<li>
   <a href="{{.URL}}">{{.Title}}</a>
-  <div class="meta">{{if .Byline}}{{.Byline}}{{end}}{{if and .Byline .SiteName}} · {{end}}{{.SiteName}}{{if or .Byline .SiteName}} · {{end}}{{.AddedAtFmt}}{{if .CacheURL}} · <a href="{{.CacheURL}}">cache</a>{{end}}</div>
+  <div class="meta">{{if .Byline}}{{.Byline}}{{end}}{{if and .Byline .SiteName}} · {{end}}{{.SiteName}}{{if or .Byline .SiteName}} · {{end}}{{.AddedAtFmt}} · <a href="{{.CacheURL}}" target="_blank" rel="noopener noreferrer">cache</a></div>
 </li>
 {{else}}<li class="empty">Nothing here yet.</li>
 {{end}}</ul>
@@ -215,7 +211,7 @@ type listItem struct {
 	Byline     string
 	SiteName   string
 	AddedAtFmt string
-	CacheURL   *string
+	CacheURL   string
 }
 
 func handleList(database *sql.DB, title string, style string) http.HandlerFunc {
@@ -229,13 +225,14 @@ func handleList(database *sql.DB, title string, style string) http.HandlerFunc {
 
 		items := make([]listItem, len(recs))
 		for i, r := range recs {
+			addedAt := time.Unix(r.AddedAt, 0).UTC()
 			items[i] = listItem{
 				URL:        r.URL,
 				Title:      r.Title,
 				Byline:     r.Byline,
 				SiteName:   r.SiteName,
-				CacheURL:   r.CacheURL,
-				AddedAtFmt: time.Unix(r.AddedAt, 0).UTC().Format("Jan 2, 2006"),
+				CacheURL:   wayback.URL(addedAt, r.URL),
+				AddedAtFmt: addedAt.Format("Jan 2, 2006"),
 			}
 		}
 

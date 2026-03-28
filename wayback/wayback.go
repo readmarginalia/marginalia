@@ -10,15 +10,14 @@ import (
 
 var client = &http.Client{Timeout: 15 * time.Second}
 
-// ArchiveURL returns an optimistically predicted Wayback Machine archive URL
-// using the current UTC timestamp.
-func ArchiveURL(targetURL string) string {
-	ts := time.Now().UTC().Format("20060102150405")
+// URL returns a Wayback Machine archive URL for the given target,
+// using the supplied timestamp to build the path.
+func URL(t time.Time, targetURL string) string {
+	ts := t.UTC().Format("20060102150405")
 	return fmt.Sprintf("https://web.archive.org/web/%s/%s", ts, targetURL)
 }
 
 // RequestSave triggers an asynchronous snapshot on the Wayback Machine.
-// It returns immediately; the actual save happens in a background goroutine.
 func RequestSave(targetURL string) {
 	go func() {
 		req, err := http.NewRequest(http.MethodGet, "https://web.archive.org/save/"+targetURL, nil)
