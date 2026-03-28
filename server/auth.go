@@ -34,7 +34,7 @@ func tokenAuth(cfg AuthConfig, limiter *failedAuthLimiter) func(http.Handler) ht
 			if limiter != nil {
 				if blockedUntil, newlyBlocked := limiter.CheckAndRecord(clientID, time.Now()); newlyBlocked {
 					logAuthDenied(r, clientID, proxied, "rate_limited", blockedUntil)
-					jsonError(w, "too many failed authentication attempts", http.StatusTooManyRequests)
+					jsonError(w, "too many failed authentication attempts", http.StatusLocked)
 					return
 				}
 			}

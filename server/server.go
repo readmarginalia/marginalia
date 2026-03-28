@@ -57,7 +57,7 @@ func New(database *sql.DB, auth AuthConfig, owner string, theme string) http.Han
 		r.Delete("/recommend/{id}", handleDelete(database))
 	})
 
-	r.Get("/rss", handleRSS(database, owner, title))
+	r.Get("/rss", handleRSS(database, owner))
 	r.Get("/", handleList(database, title, theme))
 
 	return r
@@ -118,7 +118,7 @@ func handleDelete(database *sql.DB) http.HandlerFunc {
 	}
 }
 
-func handleRSS(database *sql.DB, owner, title string) http.HandlerFunc {
+func handleRSS(database *sql.DB, owner string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		recs, err := db.All(database)
 		if err != nil {
