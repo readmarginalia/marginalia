@@ -2,6 +2,7 @@ package feed
 
 import (
 	"encoding/xml"
+	"html"
 	"time"
 
 	"marginalia/db"
@@ -11,6 +12,7 @@ type RSS struct {
 	XMLName    xml.Name `xml:"rss"`
 	Version    string   `xml:"version,attr"`
 	ContentNS  string   `xml:"xmlns:content,attr"`
+	AtomNS     string   `xml:"xmlns:atom,attr"`
 	Channel    Channel  `xml:"channel"`
 }
 
@@ -22,13 +24,19 @@ type Channel struct {
 }
 
 type Item struct {
-	Title          string `xml:"title"`
-	Link           string `xml:"link"`
-	Description    string `xml:"description"`
-	ContentEncoded string `xml:"content:encoded"`
-	Author         string `xml:"author,omitempty"`
-	PubDate        string `xml:"pubDate"`
-	GUID           string `xml:"guid"`
+	Title          string     `xml:"title"`
+	Link           string     `xml:"link"`
+	Description    string     `xml:"description"`
+	ContentEncoded string     `xml:"content:encoded"`
+	Author         string     `xml:"author,omitempty"`
+	PubDate        string     `xml:"pubDate"`
+	GUID           string     `xml:"guid"`
+	CacheLink      *AtomLink  `xml:"atom:link,omitempty"`
+}
+
+type AtomLink struct {
+	Rel  string `xml:"rel,attr"`
+	Href string `xml:"href,attr"`
 }
 
 func Render(recs []db.Recommendation, owner string) ([]byte, error) {
@@ -42,6 +50,10 @@ func Render(recs []db.Recommendation, owner string) ([]byte, error) {
 			Author:         r.Byline,
 			PubDate:        time.Unix(r.AddedAt, 0).UTC().Format(time.RFC1123Z),
 			GUID:           r.URL,
+		}
+		if r.CacheURL != nil {
+			items[i].CacheLink = &AtomLink{Rel: "related", Href: *r.CacheURL}
+			items[i].ContentEncoded += `<br><hr><p><i><a href="` + html.EscapeString(*r.CacheURL) + `">View Archived Snapshot</a></i></p>`
 		}
 	}
 
@@ -59,6 +71,7 @@ func Render(recs []db.Recommendation, owner string) ([]byte, error) {
 	rss := RSS{
 		Version:   "2.0",
 		ContentNS: "http://purl.org/rss/1.0/modules/content/",
+		AtomNS:    "http://www.w3.org/2005/Atom",
 		Channel: Channel{
 			Title:       title,
 			Description: desc,
