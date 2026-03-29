@@ -1,7 +1,7 @@
 package recommendations
 
 import (
-	"log"
+	"log/slog"
 	"marginalia/internal/common"
 	"marginalia/internal/extract"
 )
@@ -25,12 +25,21 @@ func (s *Service) Insert(options *CreateOptions) (*Recommendation, error) {
 
 	article, err := extract.FromURL(options.URL)
 	if err != nil {
+		slog.Error(
+			"failed to extract article",
+			"error", err,
+			"url", options.URL)
+
 		return nil, &common.ServiceError{Reason: "extraction failed: " + err.Error(), Code: 502}
 	}
 
 	rec, inserted, err := s.repo.Insert(options.URL, article.Title, article.Byline, article.Excerpt, article.Content, article.SiteName)
 	if err != nil {
-		log.Printf("failed to insert recommendation: %v", err)
+		slog.Error(
+			"failed to insert recommendation",
+			"error", err,
+			"url", options.URL)
+
 		return nil, &common.ServiceError{Reason: "failed to insert recommendation", Code: 500}
 	}
 	if !inserted {
@@ -43,7 +52,10 @@ func (s *Service) Insert(options *CreateOptions) (*Recommendation, error) {
 func (s *Service) Delete(id int64) error {
 	found, err := s.repo.Delete(id)
 	if err != nil {
-		log.Printf("failed to delete recommendation: %v", err)
+		slog.Error(
+			"failed to delete recommendation",
+			"error", err,
+			"recommendation_id", id)
 		return &common.ServiceError{Reason: "failed to delete recommendation", Code: 500}
 	}
 	if !found {
@@ -55,7 +67,10 @@ func (s *Service) Delete(id int64) error {
 func (s *Service) All() ([]Recommendation, error) {
 	recs, err := s.repo.All()
 	if err != nil {
-		log.Printf("failed to fetch recommendations: %v", err)
+		slog.Error(
+			"failed to fetch recommendations",
+			"error", err)
+
 		return nil, &common.ServiceError{Reason: "failed to fetch recommendations", Code: 500}
 	}
 	return recs, nil

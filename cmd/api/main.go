@@ -1,7 +1,8 @@
 package main
 
 import (
-	"log"
+	"context"
+	"log/slog"
 	"net/http"
 	"os"
 
@@ -9,14 +10,26 @@ import (
 	"marginalia/internal/common"
 	"marginalia/internal/feed"
 	"marginalia/internal/infra/db"
+	"marginalia/internal/logging"
 	"marginalia/internal/recommendations"
 	"marginalia/internal/server"
 )
 
 func main() {
+	ctx := context.Background()
+	logger, shutdown, err := logging.CreateLogger(ctx)
+	if err != nil {
+		slog.Error("failed to create logger", "error", err)
+		os.Exit(1)
+	}
+	defer shutdown(ctx)
+
+	slog.SetDefault(logger)
+
 	token := os.Getenv("TOKEN")
 	if token == "" {
-		log.Fatal("TOKEN is required")
+		slog.Error("TOKEN is required")
+		os.Exit(1)
 	}
 
 	owner := os.Getenv("OWNER")
@@ -24,7 +37,8 @@ func main() {
 
 	theme, err := server.LoadTheme(themeName)
 	if err != nil {
-		log.Fatalf("failed to load theme: %v", err)
+		slog.Error("failed to load theme", "error", err)
+		os.Exit(1)
 	}
 
 	port := os.Getenv("PORT")
@@ -39,7 +53,8 @@ func main() {
 
 	database, err := db.Open(dbPath)
 	if err != nil {
-		log.Fatalf("failed to open database: %v", err)
+		slog.Error("failed to open database", "error", err)
+		os.Exit(1)
 	}
 	defer database.Close()
 
@@ -52,7 +67,7 @@ func main() {
 	}
 
 	if auth.TrustProxy && len(auth.TrustedProxyRanges) == 0 {
-		log.Println("WARNING: TRUST_PROXY is enabled but TRUSTED_PROXIES is empty — all peers are trusted to set client IP headers")
+		slog.Warn("TRUST_PROXY is enabled but TRUSTED_PROXIES is empty — all peers are trusted to set client IP headers")
 	}
 
 	repository := recommendations.NewRepository(database)
@@ -70,6 +85,10 @@ func main() {
 
 	srv := server.New(app)
 
-	log.Printf("marginalia listening on :%s (rate_limit=%t trust_proxy=%t)", port, auth.EnableRateLimit, auth.TrustProxy)
-	log.Fatal(http.ListenAndServe(":"+port, srv))
+	slog.Info("marginalia listening on :%s (rate_limit=%t trust_proxy=%t)", "port", port, "rate_limit", auth.EnableRateLimit, "trust_proxy", auth.TrustProxy)
+	err = http.ListenAndServe(":"+port, srv)
+	if err != nil {
+		slog.Error("server stopped", "err", err, "port", port)
+		os.Exit(1)
+	}
 }

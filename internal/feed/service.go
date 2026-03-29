@@ -2,7 +2,7 @@ package feed
 
 import (
 	"crypto/sha256"
-	"log"
+	"log/slog"
 	"marginalia/internal/common"
 	"marginalia/internal/recommendations"
 	"time"
@@ -91,7 +91,7 @@ func (s *Service) RenderRss(owner string) (*RssOutput, error) {
 
 	out, err := xml.MarshalIndent(rss, "", "  ")
 	if err != nil {
-		log.Printf("Error generating RSS feed: %v", err)
+		slog.Error("Error generating RSS feed", "error", err)
 		return nil, &common.ServiceError{Reason: "rss generation error", Code: 500}
 	}
 

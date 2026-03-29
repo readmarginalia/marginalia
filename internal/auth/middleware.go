@@ -3,7 +3,7 @@ package auth
 import (
 	"crypto/sha256"
 	"crypto/subtle"
-	"log"
+	"log/slog"
 	"marginalia/internal/infra/http"
 	stdhttp "net/http"
 	"strings"
@@ -64,8 +64,19 @@ func constantTimeMatch(provided string, expectedHash [32]byte) bool {
 
 func logAuthDenied(r *stdhttp.Request, clientID string, proxied bool, reason string, blockedUntil time.Time) {
 	if blockedUntil.IsZero() {
-		log.Printf("auth denied: method=%s path=%s client=%s proxied=%t reason=%s", r.Method, r.URL.Path, clientID, proxied, reason)
+		slog.Error("auth denied",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"client", clientID,
+			"proxied", proxied,
+			"reason", reason)
 		return
 	}
-	log.Printf("auth denied: method=%s path=%s client=%s proxied=%t reason=%s blocked_until=%s", r.Method, r.URL.Path, clientID, proxied, reason, blockedUntil.UTC().Format(time.RFC3339))
+	slog.Error("auth denied",
+		"method", r.Method,
+		"path", r.URL.Path,
+		"client", clientID,
+		"proxied", proxied,
+		"reason", reason,
+		"blocked_until", blockedUntil.UTC().Format(time.RFC3339))
 }

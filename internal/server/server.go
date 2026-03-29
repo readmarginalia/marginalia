@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
+	"log/slog"
 	"marginalia/internal/auth"
 	"marginalia/internal/feed"
 	"marginalia/internal/infra/http"
@@ -86,7 +86,7 @@ func handleAdd(app *App) stdhttp.HandlerFunc {
 			return
 		}
 
-		log.Printf("added: %s — %s", body.URL, rec.Title)
+		slog.Info("added recommendation", "url", body.URL, "title", rec.Title)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(stdhttp.StatusCreated)
@@ -123,8 +123,11 @@ func handleRSS(app *App) stdhttp.HandlerFunc {
 		w.Header().Set("Last-Modified", result.LastModified.Format(stdhttp.TimeFormat))
 		w.Header().Set("Cache-Control", "no-store, must-revalidate")
 
-		log.Printf("rss: %s %s If-None-Match=%q If-Modified-Since=%q",
-			r.Method, r.URL, r.Header.Get("If-None-Match"), r.Header.Get("If-Modified-Since"))
+		slog.Info("rss request",
+			"method", r.Method,
+			"url", r.URL.String(),
+			"If-None-Match", r.Header.Get("If-None-Match"),
+			"If-Modified-Since", r.Header.Get("If-Modified-Since"))
 
 		if match := r.Header.Get("If-None-Match"); match == result.ETag {
 			w.WriteHeader(stdhttp.StatusNotModified)

@@ -6,6 +6,19 @@ services:
     volumes:
       - data:/data
     env_file: .env
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4318
+    depends_on:
+      - otel-collector
+    restart: unless-stopped
+  
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.148.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel/otelcol.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4318:4318"
     restart: unless-stopped
 
 volumes:
