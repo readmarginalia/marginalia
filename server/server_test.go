@@ -1,12 +1,12 @@
 package server
 
 import (
-	"os"
 	"bytes"
 	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"testing"
 
 	"marginalia/db"
@@ -17,19 +17,22 @@ const (
 )
 
 func initializeDb(t *testing.T) *sql.DB {
-	os.Remove(dbPath)
-	var db, err = db.Open(dbPath)
+	dbPath := path.Join(t.TempDir(), dbPath)
 
+	db, err := db.Open(dbPath)
 	if err != nil {
 		t.Error(err)
 	}
+
+	t.Cleanup(func() {
+		db.Close()
+	})
 
 	return db
 }
 
 func Test_handleRSS(t *testing.T) {
 	db := initializeDb(t)
-	defer db.Close()
 
 	req, err := http.NewRequest("GET", "/rss", nil)
 	if err != nil {
@@ -38,41 +41,50 @@ func Test_handleRSS(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	handlerFunc := handleRSS(db, "test suite")
-
 	handlerFunc.ServeHTTP(rr, req)
 
 	expected := http.StatusOK
 	if status := rr.Code; status != expected {
-		t.Errorf("status %d -> %d", expected, status)
+		t.Fatalf("expected status %d -> %d", expected, status)
 	}
 }
 
 func Test_handleAdd(t *testing.T) {
 	db := initializeDb(t)
-	defer db.Close()
 
-	data := struct {
-		Url string
-	}{Url: "https://www.freecodecamp.org/news/vim-language-and-motions-explained/"}
-
-	var buf bytes.Buffer
-	err := json.NewEncoder(&buf).Encode(data)
-	if err != nil {
-		t.Fatal(err)
+	var tests = []struct {
+		name           string
+		url            string
+		httpStatusCode int
+	}{
+		{"400 BadRequest on empty url", "", 400},
+		{"201 OK on new url", "https://www.freecodecamp.org/news/vim-language-and-motions-explained/", 201},
 	}
 
-	req, err := http.NewRequest("POST", "/recommend", &buf)
-	if err != nil {
-		t.Fatal(err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data := struct {
+				Url string
+			}{Url: tt.url}
 
-	req.Header.Set("Content-Type", "application/json")
+			var buf bytes.Buffer
+			if err := json.NewEncoder(&buf).Encode(data); err != nil {
+				t.Fatal(err)
+			}
 
-	rr := httptest.NewRecorder()
-	handleAdd(db).ServeHTTP(rr, req)
+			req, err := http.NewRequest("POST", "/recommend", &buf)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	expected := http.StatusCreated
-	if status := rr.Code; status != expected {
-		t.Errorf("status %d -> %d", expected, status)
+			req.Header.Set("Content-Type", "application/json")
+
+			recorder := httptest.NewRecorder()
+			handleAdd(db).ServeHTTP(recorder, req)
+
+			if status := recorder.Code; status != tt.httpStatusCode {
+				t.Fatalf("expected status %d -> %d", tt.httpStatusCode, status)
+			}
+		})
 	}
 }
