@@ -7,7 +7,6 @@ import (
 	"html/template"
 	"log"
 	"marginalia/internal/auth"
-	"marginalia/internal/extract"
 	"marginalia/internal/feed"
 	"marginalia/internal/infra/http"
 	"marginalia/internal/recommendations"
@@ -81,23 +80,17 @@ func handleAdd(app *App) stdhttp.HandlerFunc {
 			return
 		}
 
-		article, err := extract.FromURL(body.URL)
-		if err != nil {
-			http.JsonError(w, fmt.Sprintf("extraction failed: %v", err), stdhttp.StatusBadGateway)
-			return
-		}
-
-		id, err := app.Recommendations.Insert(&recommendations.CreateOptions{URL: body.URL})
+		rec, err := app.Recommendations.Insert(&recommendations.CreateOptions{URL: body.URL})
 		if err != nil {
 			http.WriteError(w, err)
 			return
 		}
 
-		log.Printf("added: %s — %s", body.URL, article.Title)
+		log.Printf("added: %s — %s", body.URL, rec.Title)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(stdhttp.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{"id": id, "title": article.Title})
+		json.NewEncoder(w).Encode(map[string]any{"id": rec.ID, "title": rec.Title})
 	}
 }
 

@@ -1,6 +1,7 @@
 package recommendations
 
 import (
+	"log"
 	"marginalia/internal/common"
 	"marginalia/internal/extract"
 )
@@ -17,31 +18,33 @@ type CreateOptions struct {
 	URL string `json:"url"`
 }
 
-func (s *Service) Insert(options *CreateOptions) (int64, error) {
+func (s *Service) Insert(options *CreateOptions) (*Recommendation, error) {
 	if options.URL == "" {
-		return 0, &common.ServiceError{Reason: "invalid url", Code: 400}
+		return nil, &common.ServiceError{Reason: "invalid url", Code: 400}
 	}
 
 	article, err := extract.FromURL(options.URL)
 	if err != nil {
-		return 0, &common.ServiceError{Reason: "extraction failed: " + err.Error(), Code: 502}
+		return nil, &common.ServiceError{Reason: "extraction failed: " + err.Error(), Code: 502}
 	}
 
-	id, inserted, err := s.repo.Insert(options.URL, article.Title, article.Byline, article.Excerpt, article.Content, article.SiteName)
+	rec, inserted, err := s.repo.Insert(options.URL, article.Title, article.Byline, article.Excerpt, article.Content, article.SiteName)
 	if err != nil {
-		return 0, &common.ServiceError{Reason: "db error: " + err.Error(), Code: 500}
+		log.Printf("failed to insert recommendation: %v", err)
+		return nil, &common.ServiceError{Reason: "failed to insert recommendation", Code: 500}
 	}
 	if !inserted {
-		return 0, &common.ServiceError{Reason: "url already exists", Code: 409}
+		return nil, &common.ServiceError{Reason: "url already exists", Code: 409}
 	}
 
-	return id, nil
+	return rec, nil
 }
 
 func (s *Service) Delete(id int64) error {
 	found, err := s.repo.Delete(id)
 	if err != nil {
-		return &common.ServiceError{Reason: "db error: " + err.Error(), Code: 500}
+		log.Printf("failed to delete recommendation: %v", err)
+		return &common.ServiceError{Reason: "failed to delete recommendation", Code: 500}
 	}
 	if !found {
 		return &common.ServiceError{Reason: "not found", Code: 404}
@@ -52,7 +55,8 @@ func (s *Service) Delete(id int64) error {
 func (s *Service) All() ([]Recommendation, error) {
 	recs, err := s.repo.All()
 	if err != nil {
-		return nil, &common.ServiceError{Reason: "db error: " + err.Error(), Code: 500}
+		log.Printf("failed to fetch recommendations: %v", err)
+		return nil, &common.ServiceError{Reason: "failed to fetch recommendations", Code: 500}
 	}
 	return recs, nil
 }

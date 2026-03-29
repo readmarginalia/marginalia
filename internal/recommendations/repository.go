@@ -10,21 +10,34 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) Insert(url, title, byline, excerpt, content, siteName string) (int64, bool, error) {
-	res, err := r.db.Exec(
-		`INSERT INTO recommendations (url, title, byline, excerpt, content, site_name) VALUES (?, ?, ?, ?, ?, ?)
-		 ON CONFLICT(url) DO NOTHING`,
+func (r *Repository) Insert(url, title, byline, excerpt, content, siteName string) (*Recommendation, bool, error) {
+	rec := Recommendation{}
+
+	err := r.db.QueryRow(`
+		INSERT INTO recommendations (url, title, byline, excerpt, content, site_name)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(url) DO NOTHING
+		RETURNING id, url, title, byline, excerpt, content, site_name
+	`,
 		url, title, byline, excerpt, content, siteName,
+	).Scan(
+		&rec.ID,
+		&rec.URL,
+		&rec.Title,
+		&rec.Byline,
+		&rec.Excerpt,
+		&rec.Content,
+		&rec.SiteName,
 	)
+
 	if err != nil {
-		return 0, false, err
+		if err == sql.ErrNoRows {
+			return nil, false, nil
+		}
+		return nil, false, err
 	}
-	rows, _ := res.RowsAffected()
-	if rows == 0 {
-		return 0, false, nil // duplicate
-	}
-	id, _ := res.LastInsertId()
-	return id, true, nil
+
+	return &rec, true, nil
 }
 
 func (r *Repository) Delete(id int64) (bool, error) {
