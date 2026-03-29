@@ -1,4 +1,4 @@
-package server
+package http
 
 import (
 	"sync"
@@ -12,11 +12,11 @@ const (
 	defaultAuthCleanupInterval = time.Minute
 )
 
-// failedAuthLimiter tracks failed authentication attempts per client and
+// FailedAuthLimiter tracks failed authentication attempts per client and
 // blocks clients that exceed the failure threshold.
-type failedAuthLimiter struct {
+type FailedAuthLimiter struct {
 	mu              sync.Mutex
-	attempts        map[string]failedAuthAttempt
+	attempts        map[string]FailedAuthAttempt
 	failureLimit    int
 	window          time.Duration
 	blockDuration   time.Duration
@@ -25,16 +25,20 @@ type failedAuthLimiter struct {
 	lastCleanup     time.Time
 }
 
-type failedAuthAttempt struct {
+type FailedAuthAttempt struct {
 	windowStart  time.Time
 	failures     int
 	blockedUntil time.Time
 	lastSeen     time.Time
 }
 
-func newFailedAuthLimiter(failureLimit int, window time.Duration, blockDuration time.Duration) *failedAuthLimiter {
-	return &failedAuthLimiter{
-		attempts:        make(map[string]failedAuthAttempt),
+func DefaultFailedAuthLimiter() *FailedAuthLimiter {
+	return NewFailedAuthLimiter(defaultAuthFailureLimit, defaultAuthFailureWindow, defaultAuthBlockDuration)
+}
+
+func NewFailedAuthLimiter(failureLimit int, window time.Duration, blockDuration time.Duration) *FailedAuthLimiter {
+	return &FailedAuthLimiter{
+		attempts:        make(map[string]FailedAuthAttempt),
 		failureLimit:    failureLimit,
 		window:          window,
 		blockDuration:   blockDuration,
@@ -44,7 +48,7 @@ func newFailedAuthLimiter(failureLimit int, window time.Duration, blockDuration 
 	}
 }
 
-func (l *failedAuthLimiter) Blocked(clientID string, now time.Time) (time.Time, bool) {
+func (l *FailedAuthLimiter) Blocked(clientID string, now time.Time) (time.Time, bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -55,7 +59,7 @@ func (l *failedAuthLimiter) Blocked(clientID string, now time.Time) (time.Time, 
 	return blockedUntil, blocked
 }
 
-func (l *failedAuthLimiter) CheckAndRecord(clientID string, now time.Time) (time.Time, bool) {
+func (l *FailedAuthLimiter) CheckAndRecord(clientID string, now time.Time) (time.Time, bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -82,7 +86,7 @@ func (l *failedAuthLimiter) CheckAndRecord(clientID string, now time.Time) (time
 
 // resolveBlockLocked checks if the attempt is currently blocked. If the block
 // has expired, it resets the attempt state. Must be called with mu held.
-func (l *failedAuthLimiter) resolveBlockLocked(attempt *failedAuthAttempt, now time.Time) (time.Time, bool) {
+func (l *FailedAuthLimiter) resolveBlockLocked(attempt *FailedAuthAttempt, now time.Time) (time.Time, bool) {
 	if attempt.blockedUntil.After(now) {
 		attempt.lastSeen = now
 		return attempt.blockedUntil, true
@@ -96,7 +100,7 @@ func (l *failedAuthLimiter) resolveBlockLocked(attempt *failedAuthAttempt, now t
 	return time.Time{}, false
 }
 
-func (l *failedAuthLimiter) cleanupLocked(now time.Time) {
+func (l *FailedAuthLimiter) cleanupLocked(now time.Time) {
 	if now.Sub(l.lastCleanup) < l.cleanupInterval {
 		return
 	}

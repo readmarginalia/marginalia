@@ -5,8 +5,12 @@ import (
 	"net/http"
 	"os"
 
-	"marginalia/db"
-	"marginalia/server"
+	"marginalia/internal/auth"
+	"marginalia/internal/common"
+	"marginalia/internal/feed"
+	"marginalia/internal/infra/db"
+	"marginalia/internal/recommendations"
+	"marginalia/internal/server"
 )
 
 func main() {
@@ -39,19 +43,32 @@ func main() {
 	}
 	defer database.Close()
 
-	auth := server.AuthConfig{
+	auth := auth.AuthConfig{
 		Token:              token,
-		EnableRateLimit:    envBool("AUTH_RATE_LIMIT"),
-		TrustProxy:         envBool("TRUST_PROXY"),
-		RealIPHeaders:      envList("REAL_IP_HEADERS"),
-		TrustedProxyRanges: mustParseTrustedProxyRanges(envList("TRUSTED_PROXIES")),
+		EnableRateLimit:    common.EnvBool("AUTH_RATE_LIMIT"),
+		TrustProxy:         common.EnvBool("TRUST_PROXY"),
+		RealIPHeaders:      common.EnvList("REAL_IP_HEADERS"),
+		TrustedProxyRanges: common.MustParseTrustedProxyRanges(common.EnvList("TRUSTED_PROXIES")),
 	}
 
 	if auth.TrustProxy && len(auth.TrustedProxyRanges) == 0 {
 		log.Println("WARNING: TRUST_PROXY is enabled but TRUSTED_PROXIES is empty — all peers are trusted to set client IP headers")
 	}
 
-	srv := server.New(database, auth, owner, theme)
+	repository := recommendations.NewRepository(database)
+	recommendationsService := recommendations.NewService(repository)
+	feedService := feed.NewService(recommendationsService)
+
+	app := &server.App{
+		AuthConfig:      &auth,
+		Database:        database,
+		Owner:           owner,
+		Theme:           theme,
+		Feed:            feedService,
+		Recommendations: recommendationsService,
+	}
+
+	srv := server.New(app)
 
 	log.Printf("marginalia listening on :%s (rate_limit=%t trust_proxy=%t)", port, auth.EnableRateLimit, auth.TrustProxy)
 	log.Fatal(http.ListenAndServe(":"+port, srv))

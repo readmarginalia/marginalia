@@ -1,17 +1,29 @@
 package feed
 
 import (
-	"encoding/xml"
+	"crypto/sha256"
+	"log"
+	"marginalia/internal/common"
+	"marginalia/internal/recommendations"
 	"time"
 
-	"marginalia/db"
+	"encoding/hex"
+	"encoding/xml"
 )
 
+type Service struct {
+	recommendations *recommendations.Service
+}
+
+func NewService(recommendations *recommendations.Service) *Service {
+	return &Service{recommendations: recommendations}
+}
+
 type RSS struct {
-	XMLName    xml.Name `xml:"rss"`
-	Version    string   `xml:"version,attr"`
-	ContentNS  string   `xml:"xmlns:content,attr"`
-	Channel    Channel  `xml:"channel"`
+	XMLName   xml.Name `xml:"rss"`
+	Version   string   `xml:"version,attr"`
+	ContentNS string   `xml:"xmlns:content,attr"`
+	Channel   Channel  `xml:"channel"`
 }
 
 type Channel struct {
@@ -31,7 +43,18 @@ type Item struct {
 	GUID           string `xml:"guid"`
 }
 
-func Render(recs []db.Recommendation, owner string) ([]byte, error) {
+type RssOutput struct {
+	Content      []byte
+	ETag         string
+	LastModified time.Time
+}
+
+func (s *Service) RenderRss(owner string) (*RssOutput, error) {
+	recs, err := s.recommendations.All()
+	if err != nil {
+		return nil, err
+	}
+
 	items := make([]Item, len(recs))
 	for i, r := range recs {
 		items[i] = Item{
@@ -68,7 +91,26 @@ func Render(recs []db.Recommendation, owner string) ([]byte, error) {
 
 	out, err := xml.MarshalIndent(rss, "", "  ")
 	if err != nil {
-		return nil, err
+		log.Printf("Error generating RSS feed: %v", err)
+		return nil, &common.ServiceError{Reason: "rss generation error", Code: 500}
 	}
-	return append([]byte(xml.Header), out...), nil
+
+	data := append([]byte(xml.Header), out...)
+
+	hash := sha256.Sum256(data)
+	etag := `"` + hex.EncodeToString(hash[:8]) + `"`
+
+	// Use the most recent item's timestamp as Last-Modified
+	var lastMod time.Time
+	if len(recs) > 0 {
+		lastMod = time.Unix(recs[0].AddedAt, 0).UTC()
+	} else {
+		lastMod = time.Now().UTC()
+	}
+
+	return &RssOutput{
+		Content:      data,
+		ETag:         etag,
+		LastModified: lastMod,
+	}, nil
 }

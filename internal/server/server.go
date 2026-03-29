@@ -1,23 +1,31 @@
 package server
 
 import (
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
-	"net/http"
+	"marginalia/internal/auth"
+	"marginalia/internal/extract"
+	"marginalia/internal/feed"
+	"marginalia/internal/infra/http"
+	"marginalia/internal/recommendations"
+	stdhttp "net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-
-	"marginalia/db"
-	"marginalia/extract"
-	"marginalia/feed"
 )
+
+type App struct {
+	AuthConfig      *auth.AuthConfig
+	Database        *sql.DB
+	Owner           string
+	Theme           string
+	Feed            *feed.Service
+	Recommendations *recommendations.Service
+}
 
 func ownerTitle(owner string) string {
 	if owner == "" {
@@ -29,22 +37,22 @@ func ownerTitle(owner string) string {
 	return owner + "'s Marginalia"
 }
 
-func New(database *sql.DB, auth AuthConfig, owner string, theme string) http.Handler {
-	auth = auth.withDefaults()
-	var limiter *failedAuthLimiter
-	if auth.EnableRateLimit {
-		limiter = newFailedAuthLimiter(defaultAuthFailureLimit, defaultAuthFailureWindow, defaultAuthBlockDuration)
+func New(app *App) stdhttp.Handler {
+	authConfig := app.AuthConfig.WithDefaults()
+	var limiter *http.FailedAuthLimiter
+	if authConfig.EnableRateLimit {
+		limiter = http.DefaultFailedAuthLimiter()
 	}
 
-	title := ownerTitle(owner)
+	title := ownerTitle(app.Owner)
 	r := chi.NewRouter()
 
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	r.Use(func(next stdhttp.Handler) stdhttp.Handler {
+		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			if r.Method == http.MethodOptions {
-				w.WriteHeader(http.StatusNoContent)
+			if r.Method == stdhttp.MethodOptions {
+				w.WriteHeader(stdhttp.StatusNoContent)
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -52,117 +60,91 @@ func New(database *sql.DB, auth AuthConfig, owner string, theme string) http.Han
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(tokenAuth(auth, limiter))
-		r.Post("/recommend", handleAdd(database))
-		r.Delete("/recommend/{id}", handleDelete(database))
+		r.Use(auth.TokenAuth(authConfig, limiter))
+		r.Post("/recommend", handleAdd(app))
+		r.Delete("/recommend/{id}", handleDelete(app))
 	})
 
-	r.Get("/rss", handleRSS(database, owner, title))
-	r.Get("/", handleList(database, title, theme))
+	r.Get("/rss", handleRSS(app))
+	r.Get("/", handleList(app, title, app.Theme))
 
 	return r
 }
 
-func handleAdd(database *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func handleAdd(app *App) stdhttp.HandlerFunc {
+	return func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		var body struct {
 			URL string `json:"url"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.URL == "" {
-			jsonError(w, "missing or invalid url", http.StatusBadRequest)
+			http.JsonError(w, "missing or invalid url", stdhttp.StatusBadRequest)
 			return
 		}
 
 		article, err := extract.FromURL(body.URL)
 		if err != nil {
-			jsonError(w, fmt.Sprintf("extraction failed: %v", err), http.StatusBadGateway)
+			http.JsonError(w, fmt.Sprintf("extraction failed: %v", err), stdhttp.StatusBadGateway)
 			return
 		}
 
-		id, inserted, err := db.Insert(database, body.URL, article.Title, article.Byline, article.Excerpt, article.Content, article.SiteName)
+		id, err := app.Recommendations.Insert(&recommendations.CreateOptions{URL: body.URL})
 		if err != nil {
-			jsonError(w, fmt.Sprintf("db error: %v", err), http.StatusInternalServerError)
-			return
-		}
-		if !inserted {
-			jsonError(w, "url already exists", http.StatusConflict)
+			http.WriteError(w, err)
 			return
 		}
 
 		log.Printf("added: %s — %s", body.URL, article.Title)
 
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(stdhttp.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]any{"id": id, "title": article.Title})
 	}
 }
 
-func handleDelete(database *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func handleDelete(app *App) stdhttp.HandlerFunc {
+	return func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 		if err != nil {
-			jsonError(w, "invalid id", http.StatusBadRequest)
+			http.JsonError(w, "invalid id", stdhttp.StatusBadRequest)
 			return
 		}
 
-		found, err := db.Delete(database, id)
-		if err != nil {
-			jsonError(w, fmt.Sprintf("db error: %v", err), http.StatusInternalServerError)
+		if err := app.Recommendations.Delete(id); err != nil {
+			http.WriteError(w, err)
 			return
 		}
-		if !found {
-			jsonError(w, "not found", http.StatusNotFound)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		w.WriteHeader(stdhttp.StatusNoContent)
 	}
 }
 
-func handleRSS(database *sql.DB, owner, title string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		recs, err := db.All(database)
+func handleRSS(app *App) stdhttp.HandlerFunc {
+	return func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		result, err := app.Feed.RenderRss(app.Owner)
 		if err != nil {
-			jsonError(w, fmt.Sprintf("db error: %v", err), http.StatusInternalServerError)
+			http.JsonError(w, fmt.Sprintf("feed error: %v", err), stdhttp.StatusInternalServerError)
 			return
-		}
-
-		data, err := feed.Render(recs, owner)
-		if err != nil {
-			jsonError(w, fmt.Sprintf("feed error: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		hash := sha256.Sum256(data)
-		etag := `"` + hex.EncodeToString(hash[:8]) + `"`
-
-		// Use the most recent item's timestamp as Last-Modified
-		var lastMod time.Time
-		if len(recs) > 0 {
-			lastMod = time.Unix(recs[0].AddedAt, 0).UTC()
-		} else {
-			lastMod = time.Now().UTC()
 		}
 
 		w.Header().Set("Content-Type", "application/rss+xml")
-		w.Header().Set("ETag", etag)
-		w.Header().Set("Last-Modified", lastMod.Format(http.TimeFormat))
+		w.Header().Set("ETag", result.ETag)
+		w.Header().Set("Last-Modified", result.LastModified.Format(stdhttp.TimeFormat))
 		w.Header().Set("Cache-Control", "no-store, must-revalidate")
 
 		log.Printf("rss: %s %s If-None-Match=%q If-Modified-Since=%q",
 			r.Method, r.URL, r.Header.Get("If-None-Match"), r.Header.Get("If-Modified-Since"))
 
-		if match := r.Header.Get("If-None-Match"); match == etag {
-			w.WriteHeader(http.StatusNotModified)
+		if match := r.Header.Get("If-None-Match"); match == result.ETag {
+			w.WriteHeader(stdhttp.StatusNotModified)
 			return
 		}
 		if ims := r.Header.Get("If-Modified-Since"); ims != "" {
-			if t, err := http.ParseTime(ims); err == nil && !lastMod.After(t) {
-				w.WriteHeader(http.StatusNotModified)
+			if t, err := stdhttp.ParseTime(ims); err == nil && !result.LastModified.After(t) {
+				w.WriteHeader(stdhttp.StatusNotModified)
 				return
 			}
 		}
 
-		w.Write(data)
+		w.Write(result.Content)
 	}
 }
 
@@ -210,12 +192,12 @@ type listItem struct {
 	AddedAtFmt string
 }
 
-func handleList(database *sql.DB, title string, style string) http.HandlerFunc {
+func handleList(app *App, title string, style string) stdhttp.HandlerFunc {
 	css := template.CSS(style)
-	return func(w http.ResponseWriter, r *http.Request) {
-		recs, err := db.All(database)
+	return func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		recs, err := app.Recommendations.All()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.JsonError(w, err.Error(), stdhttp.StatusInternalServerError)
 			return
 		}
 
@@ -233,10 +215,4 @@ func handleList(database *sql.DB, title string, style string) http.HandlerFunc {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		listTmpl.Execute(w, listPage{Title: title, Style: css, Items: items})
 	}
-}
-
-func jsonError(w http.ResponseWriter, msg string, code int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }

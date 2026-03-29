@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-//go:embed themes/*.css
+//go:embed resources/themes/*.css
 var themeFS embed.FS
 
 // LoadTheme returns the combined base + theme CSS for the given theme name.
@@ -16,12 +16,12 @@ func LoadTheme(name string) (string, error) {
 		name = "terminal"
 	}
 
-	base, err := themeFS.ReadFile("themes/base.css")
+	base, err := themeFS.ReadFile("resources/themes/base.css")
 	if err != nil {
 		return "", fmt.Errorf("reading base.css: %w", err)
 	}
 
-	theme, err := themeFS.ReadFile("themes/" + name + ".css")
+	theme, err := themeFS.ReadFile("resources/themes/" + name + ".css")
 	if err != nil {
 		return "", fmt.Errorf("unknown theme %q: %w", name, err)
 	}
