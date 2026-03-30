@@ -3,6 +3,8 @@ package observability
 import (
 	"os"
 
+	"marginalia/internal/buildinfo"
+
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
 )
@@ -18,7 +20,7 @@ func BuildResource() (*resource.Resource, error) {
 		resource.NewWithAttributes(
 			semconv.SchemaURL,
 			semconv.ServiceName("marginalia"),
-			semconv.ServiceVersion("0.1.0"),
+			semconv.ServiceVersion(buildinfo.Version),
 			semconv.DeploymentEnvironmentName(env),
 		),
 	)
