@@ -13,7 +13,6 @@ type RSS struct {
 	XMLName    xml.Name `xml:"rss"`
 	Version    string   `xml:"version,attr"`
 	ContentNS  string   `xml:"xmlns:content,attr"`
-	AtomNS     string   `xml:"xmlns:atom,attr"`
 	Channel    Channel  `xml:"channel"`
 }
 
@@ -32,12 +31,6 @@ type Item struct {
 	Author         string `xml:"author,omitempty"`
 	PubDate        string `xml:"pubDate"`
 	GUID           string `xml:"guid"`
-	CacheLink      *AtomLink  `xml:"atom:link,omitempty"`
-}
-
-type AtomLink struct {
-	Rel  string `xml:"rel,attr"`
-	Href string `xml:"href,attr"`
 }
 
 func Render(recs []db.Recommendation, owner string) ([]byte, error) {
@@ -53,7 +46,6 @@ func Render(recs []db.Recommendation, owner string) ([]byte, error) {
 			Author:         r.Byline,
 			PubDate:        addedAt.Format(time.RFC1123Z),
 			GUID:           r.URL,
-			CacheLink:      &AtomLink{Rel: "related", Href: cacheURL},
 		}
 	}
 
@@ -71,7 +63,6 @@ func Render(recs []db.Recommendation, owner string) ([]byte, error) {
 	rss := RSS{
 		Version:   "2.0",
 		ContentNS: "http://purl.org/rss/1.0/modules/content/",
-		AtomNS:    "http://www.w3.org/2005/Atom",
 		Channel: Channel{
 			Title:       title,
 			Description: desc,

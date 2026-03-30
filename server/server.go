@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/sha256"
 	"database/sql"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -19,6 +20,9 @@ import (
 	"marginalia/feed"
 	"marginalia/wayback"
 )
+
+//go:embed images/building.columns.fill.svg
+var cacheIcon string
 
 func ownerTitle(owner string) string {
 	if owner == "" {
@@ -189,7 +193,7 @@ var listTmpl = template.Must(template.New("list").Parse(`<!DOCTYPE html>
 <ul>
 {{range .Items}}<li>
   <a href="{{.URL}}">{{.Title}}</a>
-  <div class="meta">{{if .Byline}}{{.Byline}}{{end}}{{if and .Byline .SiteName}} · {{end}}{{.SiteName}}{{if or .Byline .SiteName}} · {{end}}{{.AddedAtFmt}} · <a href="{{.CacheURL}}" target="_blank" rel="noopener noreferrer">cache</a></div>
+  <div class="meta">{{if .Byline}}{{.Byline}}{{end}}{{if and .Byline .SiteName}} · {{end}}{{.SiteName}}{{if or .Byline .SiteName}} · {{end}}{{.AddedAtFmt}} · <a href="{{.CacheURL}}" target="_blank" rel="noopener noreferrer" title="Cached snapshot"><span style="display:inline-flex;align-items:center;width:12px;height:12px;vertical-align:middle">{{.CacheIcon}}</span></a></div>
 </li>
 {{else}}<li class="empty">Nothing here yet.</li>
 {{end}}</ul>
@@ -212,6 +216,7 @@ type listItem struct {
 	SiteName   string
 	AddedAtFmt string
 	CacheURL   string
+	CacheIcon  template.HTML
 }
 
 func handleList(database *sql.DB, title string, style string) http.HandlerFunc {
@@ -232,6 +237,7 @@ func handleList(database *sql.DB, title string, style string) http.HandlerFunc {
 				Byline:     r.Byline,
 				SiteName:   r.SiteName,
 				CacheURL:   wayback.URL(addedAt, r.URL),
+				CacheIcon:  template.HTML(cacheIcon),
 				AddedAtFmt: addedAt.Format("Jan 2, 2006"),
 			}
 		}
