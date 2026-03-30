@@ -10,21 +10,36 @@ import (
 	"marginalia/internal/common"
 	"marginalia/internal/feed"
 	"marginalia/internal/infra/db"
-	"marginalia/internal/logging"
+	"marginalia/internal/observability"
+	"marginalia/internal/observability/logging"
+	"marginalia/internal/observability/tracing"
 	"marginalia/internal/recommendations"
 	"marginalia/internal/server"
 )
 
 func main() {
 	ctx := context.Background()
-	logger, shutdown, err := logging.CreateLogger(ctx)
+	res, err := observability.BuildResource()
+	if err != nil {
+		slog.Error("failed to build resource", "error", err)
+		os.Exit(1)
+	}
+
+	logger, shutdownLogs, err := logging.CreateLogger(ctx, res)
 	if err != nil {
 		slog.Error("failed to create logger", "error", err)
 		os.Exit(1)
 	}
-	defer shutdown(ctx)
+	defer shutdownLogs(ctx)
 
 	slog.SetDefault(logger)
+
+	shutdownTracing, err := tracing.SetupTracing(ctx, res)
+	if err != nil {
+		slog.Error("failed to setup tracing", "error", err)
+		os.Exit(1)
+	}
+	defer shutdownTracing(ctx)
 
 	token := os.Getenv("TOKEN")
 	if token == "" {
@@ -83,10 +98,18 @@ func main() {
 		Recommendations: recommendationsService,
 	}
 
-	srv := server.New(app)
+	appHandler := tracing.AddTraceContext(
+		logging.AddRequestLogging(
+			server.New(app),
+		),
+	)
 
-	slog.Info("marginalia listening on :%s (rate_limit=%t trust_proxy=%t)", "port", port, "rate_limit", auth.EnableRateLimit, "trust_proxy", auth.TrustProxy)
-	err = http.ListenAndServe(":"+port, srv)
+	slog.Info("marginalia listening",
+		"port", port,
+		"rate_limit", auth.EnableRateLimit,
+		"trust_proxy", auth.TrustProxy)
+
+	err = http.ListenAndServe(":"+port, appHandler)
 	if err != nil {
 		slog.Error("server stopped", "err", err, "port", port)
 		os.Exit(1)

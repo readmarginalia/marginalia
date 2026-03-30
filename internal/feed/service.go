@@ -1,9 +1,10 @@
 package feed
 
 import (
+	"context"
 	"crypto/sha256"
-	"log/slog"
 	"marginalia/internal/common"
+	"marginalia/internal/observability/logging"
 	"marginalia/internal/recommendations"
 	"time"
 
@@ -49,10 +50,14 @@ type RssOutput struct {
 	LastModified time.Time
 }
 
-func (s *Service) RenderRss(owner string) (*RssOutput, error) {
-	recs, err := s.recommendations.All()
+func (s *Service) RenderRss(ctx context.Context, owner string) (*RssOutput, error) {
+	logger := logging.FromContext(ctx)
+	recs, err := s.recommendations.All(ctx)
 	if err != nil {
-		return nil, err
+		logger.ErrorContext(ctx,
+			"failed to fetch recommendations",
+			"error", err)
+		return nil, &common.ServiceError{Reason: "failed to fetch recommendations", Code: 500}
 	}
 
 	items := make([]Item, len(recs))
@@ -91,7 +96,9 @@ func (s *Service) RenderRss(owner string) (*RssOutput, error) {
 
 	out, err := xml.MarshalIndent(rss, "", "  ")
 	if err != nil {
-		slog.Error("Error generating RSS feed", "error", err)
+		logger.ErrorContext(ctx,
+			"error generating RSS feed",
+			"error", err)
 		return nil, &common.ServiceError{Reason: "rss generation error", Code: 500}
 	}
 

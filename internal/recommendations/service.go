@@ -1,9 +1,10 @@
 package recommendations
 
 import (
-	"log/slog"
+	"context"
 	"marginalia/internal/common"
 	"marginalia/internal/extract"
+	"marginalia/internal/observability/logging"
 )
 
 type Service struct {
@@ -18,14 +19,19 @@ type CreateOptions struct {
 	URL string `json:"url"`
 }
 
-func (s *Service) Insert(options *CreateOptions) (*Recommendation, error) {
+func (s *Service) Insert(ctx context.Context, options *CreateOptions) (*Recommendation, error) {
+	logger := logging.FromContext(ctx)
+
 	if options.URL == "" {
+		logger.ErrorContext(ctx,
+			"invalid url",
+			"url", options.URL)
 		return nil, &common.ServiceError{Reason: "invalid url", Code: 400}
 	}
 
 	article, err := extract.FromURL(options.URL)
 	if err != nil {
-		slog.Error(
+		logger.ErrorContext(ctx,
 			"failed to extract article",
 			"error", err,
 			"url", options.URL)
@@ -35,7 +41,7 @@ func (s *Service) Insert(options *CreateOptions) (*Recommendation, error) {
 
 	rec, inserted, err := s.repo.Insert(options.URL, article.Title, article.Byline, article.Excerpt, article.Content, article.SiteName)
 	if err != nil {
-		slog.Error(
+		logger.ErrorContext(ctx,
 			"failed to insert recommendation",
 			"error", err,
 			"url", options.URL)
@@ -43,31 +49,47 @@ func (s *Service) Insert(options *CreateOptions) (*Recommendation, error) {
 		return nil, &common.ServiceError{Reason: "failed to insert recommendation", Code: 500}
 	}
 	if !inserted {
+		logger.ErrorContext(ctx,
+			"url already exists",
+			"url", options.URL)
 		return nil, &common.ServiceError{Reason: "url already exists", Code: 409}
 	}
+
+	logger.InfoContext(ctx,
+		"added recommendation",
+		"url", options.URL,
+		"title", rec.Title)
 
 	return rec, nil
 }
 
-func (s *Service) Delete(id int64) error {
+func (s *Service) Delete(ctx context.Context, id int64) error {
+	logger := logging.FromContext(ctx)
 	found, err := s.repo.Delete(id)
 	if err != nil {
-		slog.Error(
+		logger.ErrorContext(ctx,
 			"failed to delete recommendation",
 			"error", err,
 			"recommendation_id", id)
 		return &common.ServiceError{Reason: "failed to delete recommendation", Code: 500}
 	}
 	if !found {
+		logger.InfoContext(ctx,
+			"recommendation not found",
+			"recommendation_id", id)
 		return &common.ServiceError{Reason: "not found", Code: 404}
 	}
+	logger.InfoContext(ctx,
+		"deleted recommendation",
+		"recommendation_id", id)
 	return nil
 }
 
-func (s *Service) All() ([]Recommendation, error) {
+func (s *Service) All(ctx context.Context) ([]Recommendation, error) {
+	logger := logging.FromContext(ctx)
 	recs, err := s.repo.All()
 	if err != nil {
-		slog.Error(
+		logger.ErrorContext(ctx,
 			"failed to fetch recommendations",
 			"error", err)
 
