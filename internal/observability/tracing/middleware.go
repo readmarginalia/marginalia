@@ -7,5 +7,10 @@ import (
 )
 
 func AddTraceContext(next http.Handler) http.Handler {
-	return otelhttp.NewHandler(next, "http.server")
+	return otelhttp.NewHandler(next,
+		"http.server",
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+			return r.Method + " " + r.URL.Path
+		}),
+	)
 }
