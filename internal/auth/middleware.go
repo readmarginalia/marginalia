@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"marginalia/internal/infra/http"
-	"marginalia/internal/observability/logging"
+	"marginalia/internal/telemetry/logging"
 	stdhttp "net/http"
 	"strings"
 	"time"

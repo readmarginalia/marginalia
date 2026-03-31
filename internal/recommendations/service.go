@@ -4,7 +4,7 @@ import (
 	"context"
 	"marginalia/internal/common"
 	"marginalia/internal/extract"
-	"marginalia/internal/observability/logging"
+	"marginalia/internal/telemetry/logging"
 )
 
 type Service struct {

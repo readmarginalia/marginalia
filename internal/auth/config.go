@@ -2,7 +2,7 @@ package auth
 
 import (
 	"marginalia/internal/infra/http"
-	"marginalia/internal/observability/logging"
+	"marginalia/internal/telemetry/logging"
 	stdhttp "net/http"
 	"net/netip"
 	"strings"

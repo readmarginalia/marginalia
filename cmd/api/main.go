@@ -10,16 +10,16 @@ import (
 	"marginalia/internal/common"
 	"marginalia/internal/feed"
 	"marginalia/internal/infra/db"
-	"marginalia/internal/observability"
-	"marginalia/internal/observability/logging"
-	"marginalia/internal/observability/tracing"
 	"marginalia/internal/recommendations"
 	"marginalia/internal/server"
+	"marginalia/internal/telemetry"
+	"marginalia/internal/telemetry/logging"
+	"marginalia/internal/telemetry/tracing"
 )
 
 func main() {
 	ctx := context.Background()
-	res, err := observability.BuildResource()
+	res, err := telemetry.BuildResource()
 	if err != nil {
 		slog.Error("failed to build resource", "error", err)
 		os.Exit(1)

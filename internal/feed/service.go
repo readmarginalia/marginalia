@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"marginalia/internal/common"
-	"marginalia/internal/observability/logging"
 	"marginalia/internal/recommendations"
+	"marginalia/internal/telemetry/logging"
 	"time"
 
 	"encoding/hex"
