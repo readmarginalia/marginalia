@@ -29,7 +29,7 @@ func (s *Service) Insert(ctx context.Context, options *CreateOptions) (*Recommen
 		logger.ErrorContext(ctx,
 			"invalid url",
 			"url", options.URL)
-		return nil, &common.ServiceError{Reason: "invalid url", Code: 400}
+		return nil, common.ServiceError{Reason: "invalid url", Code: 400}
 	}
 
 	article, err := extract.FromURL(ctx, options.URL)
@@ -39,7 +39,7 @@ func (s *Service) Insert(ctx context.Context, options *CreateOptions) (*Recommen
 			"error", err,
 			"url", options.URL)
 
-		return nil, &common.ServiceError{Reason: "extraction failed: " + err.Error(), Code: 502}
+		return nil, common.ServiceError{Reason: "extraction failed: " + err.Error(), Code: 502}
 	}
 
 	rec, inserted, err := s.repo.Insert(ctx, options.URL, article.Title, article.Byline, article.Excerpt, article.Content, article.SiteName)
@@ -49,13 +49,13 @@ func (s *Service) Insert(ctx context.Context, options *CreateOptions) (*Recommen
 			"error", err,
 			"url", options.URL)
 
-		return nil, &common.ServiceError{Reason: "failed to insert recommendation", Code: 500}
+		return nil, common.ServiceError{Reason: "failed to insert recommendation", Code: 500}
 	}
 	if !inserted {
 		logger.ErrorContext(ctx,
 			"url already exists",
 			"url", options.URL)
-		return nil, &common.ServiceError{Reason: "url already exists", Code: 409}
+		return nil, common.ServiceError{Reason: "url already exists", Code: 409}
 	}
 
 	logger.InfoContext(ctx,
@@ -77,13 +77,13 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 			"failed to delete recommendation",
 			"error", err,
 			"recommendation_id", id)
-		return &common.ServiceError{Reason: "failed to delete recommendation", Code: 500}
+		return common.ServiceError{Reason: "failed to delete recommendation", Code: 500}
 	}
 	if !found {
 		logger.InfoContext(ctx,
 			"recommendation not found",
 			"recommendation_id", id)
-		return &common.ServiceError{Reason: "not found", Code: 404}
+		return common.ServiceError{Reason: "not found", Code: 404}
 	}
 	logger.InfoContext(ctx,
 		"deleted recommendation",
@@ -102,7 +102,7 @@ func (s *Service) All(ctx context.Context) ([]Recommendation, error) {
 			"failed to fetch recommendations",
 			"error", err)
 
-		return nil, &common.ServiceError{Reason: "failed to fetch recommendations", Code: 500}
+		return nil, common.ServiceError{Reason: "failed to fetch recommendations", Code: 500}
 	}
 	return recs, nil
 }
