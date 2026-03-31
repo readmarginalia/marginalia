@@ -39,7 +39,7 @@ func (s *Service) Insert(ctx context.Context, options *CreateOptions) (*Recommen
 		return nil, &common.ServiceError{Reason: "extraction failed: " + err.Error(), Code: 502}
 	}
 
-	rec, inserted, err := s.repo.Insert(options.URL, article.Title, article.Byline, article.Excerpt, article.Content, article.SiteName)
+	rec, inserted, err := s.repo.Insert(ctx, options.URL, article.Title, article.Byline, article.Excerpt, article.Content, article.SiteName)
 	if err != nil {
 		logger.ErrorContext(ctx,
 			"failed to insert recommendation",
@@ -65,7 +65,7 @@ func (s *Service) Insert(ctx context.Context, options *CreateOptions) (*Recommen
 
 func (s *Service) Delete(ctx context.Context, id int64) error {
 	logger := logging.FromContext(ctx)
-	found, err := s.repo.Delete(id)
+	found, err := s.repo.Delete(ctx, id)
 	if err != nil {
 		logger.ErrorContext(ctx,
 			"failed to delete recommendation",
@@ -87,7 +87,7 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 
 func (s *Service) All(ctx context.Context) ([]Recommendation, error) {
 	logger := logging.FromContext(ctx)
-	recs, err := s.repo.All()
+	recs, err := s.repo.All(ctx)
 	if err != nil {
 		logger.ErrorContext(ctx,
 			"failed to fetch recommendations",

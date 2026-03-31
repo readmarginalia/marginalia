@@ -18,8 +18,10 @@ compactor:
 storage:
   trace:
     backend: local
+    wal:
+      path: /var/tempo/wal
     local:
-      path: /var/tempo/blocks
+      path: /var/tempo/traces
 
 metrics_generator:
   registry:
