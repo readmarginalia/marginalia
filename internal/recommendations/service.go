@@ -20,6 +20,9 @@ type CreateOptions struct {
 }
 
 func (s *Service) Insert(ctx context.Context, options *CreateOptions) (*Recommendation, error) {
+	ctx, span := tracer.Start(ctx, "service.Insert")
+	defer span.End()
+
 	logger := logging.FromContext(ctx)
 
 	if options.URL == "" {
@@ -29,7 +32,7 @@ func (s *Service) Insert(ctx context.Context, options *CreateOptions) (*Recommen
 		return nil, &common.ServiceError{Reason: "invalid url", Code: 400}
 	}
 
-	article, err := extract.FromURL(options.URL)
+	article, err := extract.FromURL(ctx, options.URL)
 	if err != nil {
 		logger.ErrorContext(ctx,
 			"failed to extract article",
@@ -64,6 +67,9 @@ func (s *Service) Insert(ctx context.Context, options *CreateOptions) (*Recommen
 }
 
 func (s *Service) Delete(ctx context.Context, id int64) error {
+	ctx, span := tracer.Start(ctx, "service.Delete")
+	defer span.End()
+
 	logger := logging.FromContext(ctx)
 	found, err := s.repo.Delete(ctx, id)
 	if err != nil {
@@ -86,6 +92,9 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 }
 
 func (s *Service) All(ctx context.Context) ([]Recommendation, error) {
+	ctx, span := tracer.Start(ctx, "service.All")
+	defer span.End()
+
 	logger := logging.FromContext(ctx)
 	recs, err := s.repo.All(ctx)
 	if err != nil {

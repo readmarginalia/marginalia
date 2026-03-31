@@ -2,6 +2,7 @@ package extract
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"time"
 
@@ -16,7 +17,9 @@ type Article struct {
 	SiteName string
 }
 
-func FromURL(rawURL string) (*Article, error) {
+func FromURL(ctx context.Context, rawURL string) (*Article, error) {
+	ctx, span := tracer.Start(ctx, "extract.FromURL")
+	defer span.End()
 	article, err := readability.FromURL(rawURL, 30*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("extract article: %w", err)
