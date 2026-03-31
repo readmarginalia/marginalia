@@ -7,6 +7,6 @@ type ServiceError struct {
 	Code   int    `json:"-"`
 }
 
-func (e *ServiceError) Error() string {
+func (e ServiceError) Error() string {
 	return e.Reason + " (code: " + strconv.Itoa(e.Code) + ")"
 }

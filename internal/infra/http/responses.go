@@ -14,7 +14,7 @@ func JsonError(w http.ResponseWriter, msg string, code int) {
 }
 
 func WriteError(w http.ResponseWriter, err error) {
-	var svcErr *common.ServiceError
+	var svcErr common.ServiceError
 	if errors.As(err, &svcErr) {
 		JsonError(w, svcErr.Reason, svcErr.Code)
 		return

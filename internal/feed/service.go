@@ -19,40 +19,10 @@ func NewService(recommendations *recommendations.Service) *Service {
 	return &Service{recommendations: recommendations}
 }
 
-type RSS struct {
-	XMLName   xml.Name `xml:"rss"`
-	Version   string   `xml:"version,attr"`
-	ContentNS string   `xml:"xmlns:content,attr"`
-	Channel   Channel  `xml:"channel"`
-}
-
-type Channel struct {
-	Title       string `xml:"title"`
-	Link        string `xml:"link"`
-	Description string `xml:"description"`
-	Items       []Item `xml:"item"`
-}
-
-type Item struct {
-	Title          string `xml:"title"`
-	Link           string `xml:"link"`
-	Description    string `xml:"description"`
-	ContentEncoded string `xml:"content:encoded"`
-	Author         string `xml:"author,omitempty"`
-	PubDate        string `xml:"pubDate"`
-	GUID           string `xml:"guid"`
-}
-
-type RssOutput struct {
-	Content      []byte
-	ETag         string
-	LastModified time.Time
-}
-
 func (s *Service) RenderRss(owner string) (*RssOutput, error) {
 	recs, err := s.recommendations.All()
 	if err != nil {
-		return nil, err
+		return nil, common.ServiceError{Reason: "failed to fetch recommendations", Code: 500}
 	}
 
 	items := make([]Item, len(recs))
@@ -92,7 +62,7 @@ func (s *Service) RenderRss(owner string) (*RssOutput, error) {
 	out, err := xml.MarshalIndent(rss, "", "  ")
 	if err != nil {
 		log.Printf("Error generating RSS feed: %v", err)
-		return nil, &common.ServiceError{Reason: "rss generation error", Code: 500}
+		return nil, common.ServiceError{Reason: "rss generation error", Code: 500}
 	}
 
 	data := append([]byte(xml.Header), out...)
