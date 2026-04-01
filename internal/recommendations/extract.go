@@ -1,4 +1,4 @@
-package extract
+package recommendations
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ type Article struct {
 	SiteName string
 }
 
-func FromURL(rawURL string) (*Article, error) {
+func extractFromURL(rawURL string) (*Article, error) {
 	article, err := readability.FromURL(rawURL, 30*time.Second)
 
 	if err != nil {

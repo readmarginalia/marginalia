@@ -3,7 +3,6 @@ package recommendations
 import (
 	"log"
 	"marginalia/internal/common"
-	"marginalia/internal/recommendations/extract"
 )
 
 type Service struct {
@@ -23,7 +22,7 @@ func (s *Service) Insert(options CreateOptions) (*Recommendation, error) {
 		return nil, common.ServiceError{Reason: "invalid url", Code: 400}
 	}
 
-	article, err := extract.FromURL(options.URL)
+	article, err := extractFromURL(options.URL)
 	if err != nil {
 		return nil, common.ServiceError{Reason: "extraction failed: " + err.Error(), Code: 502}
 	}
