@@ -193,7 +193,7 @@ var listTmpl = template.Must(template.New("list").Parse(`<!DOCTYPE html>
 <ul>
 {{range .Items}}<li>
   <a href="{{.URL}}">{{.Title}}</a>
-  <div class="meta">{{if .Byline}}{{.Byline}}{{end}}{{if and .Byline .SiteName}} · {{end}}{{.SiteName}}{{if or .Byline .SiteName}} · {{end}}{{.AddedAtFmt}} · <a href="{{.CacheURL}}" target="_blank" rel="noopener noreferrer" title="Cached snapshot"><span style="display:inline-flex;align-items:center;width:14px;height:14px;vertical-align:-0.15em">{{.CacheIcon}}</span></a></div>
+  <div class="meta">{{if .Byline}}{{.Byline}}{{end}}{{if and .Byline .SiteName}} · {{end}}{{.SiteName}}{{if or .Byline .SiteName}} · {{end}}{{.AddedAtFmt}}{{if .CacheURL}} · <a href="{{.CacheURL}}" target="_blank" rel="noopener noreferrer" title="Cached snapshot" style="color:inherit"><span style="display:inline-flex;align-items:center;width:14px;height:14px;vertical-align:-0.15em">{{.CacheIcon}}</span></a>{{end}}</div>
 </li>
 {{else}}<li class="empty">Nothing here yet.</li>
 {{end}}</ul>
