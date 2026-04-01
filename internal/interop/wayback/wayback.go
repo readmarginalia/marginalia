@@ -29,7 +29,7 @@ func NewClient(baseURL string, timeout time.Duration) (*WaybackClient, error) {
 
 func (c *WaybackClient) RequestSave(targetURL string) error {
 	escapedUrl := url.PathEscape(targetURL)
-	u := c.baseURL
+	u := *c.baseURL
 	u.Path = path.Join(u.Path, "save", escapedUrl)
 
 	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
