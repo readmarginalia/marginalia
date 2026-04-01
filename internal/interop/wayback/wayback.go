@@ -28,9 +28,9 @@ func NewClient(baseURL string, timeout time.Duration) (*WaybackClient, error) {
 }
 
 func (c *WaybackClient) RequestSave(targetURL string) error {
-	escapedUrl := url.PathEscape(targetURL)
 	u := *c.baseURL
-	u.Path = path.Join(u.Path, "save", escapedUrl)
+	u.Path = path.Join(u.Path, "save")
+	u.Path = u.Path + "/" + targetURL
 
 	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -50,6 +50,7 @@ func (c *WaybackClient) RequestSave(targetURL string) error {
 
 	if resp.StatusCode >= 400 {
 		log.Printf("wayback: save returned %d for %s", resp.StatusCode, targetURL)
+		return fmt.Errorf("wayback save failed with status %d", resp.StatusCode)
 	}
 	return nil
 }
