@@ -1,4 +1,4 @@
-package extract
+package recommendations
 
 import (
 	"bytes"
@@ -17,10 +17,11 @@ type Article struct {
 	SiteName string
 }
 
-func FromURL(ctx context.Context, rawURL string) (*Article, error) {
-	ctx, span := tracer.Start(ctx, "extract.FromURL")
+func extractFromURL(ctx context.Context, rawURL string) (*Article, error) {
+	ctx, span := tracer.Start(ctx, "extractFromURL")
 	defer span.End()
 	article, err := readability.FromURL(rawURL, 30*time.Second)
+
 	if err != nil {
 		return nil, fmt.Errorf("extract article: %w", err)
 	}

@@ -9,6 +9,8 @@ import (
 	"marginalia/internal/feed"
 	"marginalia/internal/infra/http"
 	"marginalia/internal/recommendations"
+	"marginalia/internal/server/requests"
+	"marginalia/internal/server/responses"
 	"marginalia/internal/telemetry/logging"
 	stdhttp "net/http"
 	"strconv"
@@ -72,23 +74,22 @@ func New(app *App) stdhttp.Handler {
 
 func handleAdd(app *App) stdhttp.HandlerFunc {
 	return func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-		var body struct {
-			URL string `json:"url"`
-		}
+
+		var body requests.AddRecommendation
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.URL == "" {
 			http.JsonError(w, "missing or invalid url", stdhttp.StatusBadRequest)
 			return
 		}
 
-		rec, err := app.Recommendations.Insert(r.Context(), &recommendations.CreateOptions{URL: body.URL})
+		rec, err := app.Recommendations.Insert(r.Context(), recommendations.CreateOptions{URL: body.URL})
 		if err != nil {
 			http.WriteError(w, err)
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(stdhttp.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{"id": rec.ID, "title": rec.Title})
+		response := responses.RecommendationAdded{Id: rec.ID, Title: rec.Title}
+
+		http.JsonResponse(w, response, stdhttp.StatusCreated)
 	}
 }
 

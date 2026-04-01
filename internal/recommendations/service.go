@@ -3,7 +3,6 @@ package recommendations
 import (
 	"context"
 	"marginalia/internal/common"
-	"marginalia/internal/extract"
 	"marginalia/internal/telemetry/logging"
 )
 
@@ -19,7 +18,7 @@ type CreateOptions struct {
 	URL string `json:"url"`
 }
 
-func (s *Service) Insert(ctx context.Context, options *CreateOptions) (*Recommendation, error) {
+func (s *Service) Insert(ctx context.Context, options CreateOptions) (*Recommendation, error) {
 	ctx, span := tracer.Start(ctx, "service.Insert")
 	defer span.End()
 
@@ -32,7 +31,7 @@ func (s *Service) Insert(ctx context.Context, options *CreateOptions) (*Recommen
 		return nil, common.ServiceError{Reason: "invalid url", Code: 400}
 	}
 
-	article, err := extract.FromURL(ctx, options.URL)
+	article, err := extractFromURL(ctx, options.URL)
 	if err != nil {
 		logger.ErrorContext(ctx,
 			"failed to extract article",
