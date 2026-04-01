@@ -3,7 +3,7 @@ package recommendations
 import (
 	"log"
 	"marginalia/internal/common"
-	"marginalia/internal/extract"
+	"marginalia/internal/recommendations/extract"
 )
 
 type Service struct {
@@ -18,7 +18,7 @@ type CreateOptions struct {
 	URL string `json:"url"`
 }
 
-func (s *Service) Insert(options *CreateOptions) (*Recommendation, error) {
+func (s *Service) Insert(options CreateOptions) (*Recommendation, error) {
 	if options.URL == "" {
 		return nil, common.ServiceError{Reason: "invalid url", Code: 400}
 	}
