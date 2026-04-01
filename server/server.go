@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/sha256"
 	"database/sql"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -17,7 +18,11 @@ import (
 	"marginalia/db"
 	"marginalia/extract"
 	"marginalia/feed"
+	"marginalia/wayback"
 )
+
+//go:embed images/building.columns.fill.svg
+var cacheIcon string
 
 func ownerTitle(owner string) string {
 	if owner == "" {
@@ -88,6 +93,8 @@ func handleAdd(database *sql.DB) http.HandlerFunc {
 			jsonError(w, "url already exists", http.StatusConflict)
 			return
 		}
+
+		wayback.RequestSave(body.URL)
 
 		log.Printf("added: %s — %s", body.URL, article.Title)
 
@@ -186,7 +193,7 @@ var listTmpl = template.Must(template.New("list").Parse(`<!DOCTYPE html>
 <ul>
 {{range .Items}}<li>
   <a href="{{.URL}}">{{.Title}}</a>
-  <div class="meta">{{if .Byline}}{{.Byline}}{{end}}{{if and .Byline .SiteName}} · {{end}}{{.SiteName}}{{if or .Byline .SiteName}} · {{end}}{{.AddedAtFmt}}</div>
+  <div class="meta">{{if .Byline}}{{.Byline}}{{end}}{{if and .Byline .SiteName}} · {{end}}{{.SiteName}}{{if or .Byline .SiteName}} · {{end}}{{.AddedAtFmt}}{{if .CacheURL}} · <a href="{{.CacheURL}}" target="_blank" rel="noopener noreferrer" title="Cached snapshot" style="color:inherit"><span style="display:inline-flex;align-items:center;width:14px;height:14px;vertical-align:-0.15em">{{.CacheIcon}}</span></a>{{end}}</div>
 </li>
 {{else}}<li class="empty">Nothing here yet.</li>
 {{end}}</ul>
@@ -208,6 +215,8 @@ type listItem struct {
 	Byline     string
 	SiteName   string
 	AddedAtFmt string
+	CacheURL   string
+	CacheIcon  template.HTML
 }
 
 func handleList(database *sql.DB, title string, style string) http.HandlerFunc {
@@ -221,12 +230,15 @@ func handleList(database *sql.DB, title string, style string) http.HandlerFunc {
 
 		items := make([]listItem, len(recs))
 		for i, r := range recs {
+			addedAt := time.Unix(r.AddedAt, 0).UTC()
 			items[i] = listItem{
 				URL:        r.URL,
 				Title:      r.Title,
 				Byline:     r.Byline,
 				SiteName:   r.SiteName,
-				AddedAtFmt: time.Unix(r.AddedAt, 0).UTC().Format("Jan 2, 2006"),
+				CacheURL:   wayback.URL(addedAt, r.URL),
+				CacheIcon:  template.HTML(cacheIcon),
+				AddedAtFmt: addedAt.Format("Jan 2, 2006"),
 			}
 		}
 

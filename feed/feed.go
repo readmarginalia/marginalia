@@ -2,9 +2,11 @@ package feed
 
 import (
 	"encoding/xml"
+	"html"
 	"time"
 
 	"marginalia/db"
+	"marginalia/wayback"
 )
 
 type RSS struct {
@@ -34,13 +36,15 @@ type Item struct {
 func Render(recs []db.Recommendation, owner string) ([]byte, error) {
 	items := make([]Item, len(recs))
 	for i, r := range recs {
+		addedAt := time.Unix(r.AddedAt, 0).UTC()
+		cacheURL := wayback.URL(addedAt, r.URL)
 		items[i] = Item{
 			Title:          r.Title,
 			Link:           r.URL,
 			Description:    r.Excerpt,
-			ContentEncoded: r.Content,
+			ContentEncoded: r.Content + `<br><hr><p><i><a href="` + html.EscapeString(cacheURL) + `">View Archived Snapshot</a></i></p>`,
 			Author:         r.Byline,
-			PubDate:        time.Unix(r.AddedAt, 0).UTC().Format(time.RFC1123Z),
+			PubDate:        addedAt.Format(time.RFC1123Z),
 			GUID:           r.URL,
 		}
 	}
