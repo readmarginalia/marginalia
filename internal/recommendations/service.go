@@ -3,14 +3,16 @@ package recommendations
 import (
 	"log"
 	"marginalia/internal/common"
+	"marginalia/internal/interop/wayback"
 )
 
 type Service struct {
-	repo *Repository
+	repo    *Repository
+	wayback *wayback.WaybackClient
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo *Repository, wayback *wayback.WaybackClient) *Service {
+	return &Service{repo: repo, wayback: wayback}
 }
 
 type CreateOptions struct {
@@ -26,6 +28,12 @@ func (s *Service) Insert(options CreateOptions) (*Recommendation, error) {
 	if err != nil {
 		return nil, common.ServiceError{Reason: "extraction failed: " + err.Error(), Code: 502}
 	}
+
+	go func() {
+		if err := s.wayback.RequestSave(options.URL); err != nil {
+			log.Printf("wayback save failed for %s: %v", options.URL, err)
+		}
+	}()
 
 	rec, inserted, err := s.repo.Insert(options.URL, article.Title, article.Byline, article.Excerpt, article.Content, article.SiteName)
 	if err != nil {

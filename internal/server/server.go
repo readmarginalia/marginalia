@@ -9,6 +9,7 @@ import (
 	"marginalia/internal/auth"
 	"marginalia/internal/feed"
 	"marginalia/internal/infra/http"
+	"marginalia/internal/interop/wayback"
 	"marginalia/internal/recommendations"
 	"marginalia/internal/server/requests"
 	"marginalia/internal/server/responses"
@@ -16,8 +17,13 @@ import (
 	"strconv"
 	"time"
 
+	_ "embed"
+
 	"github.com/go-chi/chi/v5"
 )
+
+//go:embed resources/images/building.columns.fill.svg
+var cacheIcon string
 
 type App struct {
 	AuthConfig      *auth.AuthConfig
@@ -162,7 +168,7 @@ var listTmpl = template.Must(template.New("list").Parse(`<!DOCTYPE html>
 <ul>
 {{range .Items}}<li>
   <a href="{{.URL}}">{{.Title}}</a>
-  <div class="meta">{{if .Byline}}{{.Byline}}{{end}}{{if and .Byline .SiteName}} · {{end}}{{.SiteName}}{{if or .Byline .SiteName}} · {{end}}{{.AddedAtFmt}}</div>
+  <div class="meta">{{if .Byline}}{{.Byline}}{{end}}{{if and .Byline .SiteName}} · {{end}}{{.SiteName}}{{if or .Byline .SiteName}} · {{end}}{{.AddedAtFmt}}{{if .CacheURL}} · <a href="{{.CacheURL}}" target="_blank" rel="noopener noreferrer" title="Cached snapshot" style="color:inherit"><span style="display:inline-flex;align-items:center;width:14px;height:14px;vertical-align:-0.15em">{{.CacheIcon}}</span></a>{{end}}</div>
 </li>
 {{else}}<li class="empty">Nothing here yet.</li>
 {{end}}</ul>
@@ -184,6 +190,8 @@ type listItem struct {
 	Byline     string
 	SiteName   string
 	AddedAtFmt string
+	CacheURL   string
+	CacheIcon  template.HTML
 }
 
 func handleList(app *App, title string, style string) stdhttp.HandlerFunc {
@@ -197,12 +205,15 @@ func handleList(app *App, title string, style string) stdhttp.HandlerFunc {
 
 		items := make([]listItem, len(recs))
 		for i, r := range recs {
+			addedAt := time.Unix(r.AddedAt, 0).UTC()
 			items[i] = listItem{
 				URL:        r.URL,
 				Title:      r.Title,
 				Byline:     r.Byline,
 				SiteName:   r.SiteName,
-				AddedAtFmt: time.Unix(r.AddedAt, 0).UTC().Format("Jan 2, 2006"),
+				CacheURL:   wayback.URL(addedAt, r.URL),
+				CacheIcon:  template.HTML(cacheIcon),
+				AddedAtFmt: addedAt.Format("Jan 2, 2006"),
 			}
 		}
 
