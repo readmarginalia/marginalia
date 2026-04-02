@@ -1,4 +1,4 @@
-package main
+package common
 
 import (
 	"log"
@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func envBool(name string) bool {
+func EnvBool(name string) bool {
 	value := strings.TrimSpace(os.Getenv(name))
 	if value == "" {
 		return false
@@ -20,7 +20,7 @@ func envBool(name string) bool {
 	return enabled
 }
 
-func envList(name string) []string {
+func EnvList(name string) []string {
 	value := strings.TrimSpace(os.Getenv(name))
 	if value == "" {
 		return nil
@@ -36,7 +36,7 @@ func envList(name string) []string {
 	return items
 }
 
-func mustParseTrustedProxyRanges(values []string) []netip.Prefix {
+func MustParseTrustedProxyRanges(values []string) []netip.Prefix {
 	prefixes := make([]netip.Prefix, 0, len(values))
 	for _, value := range values {
 		if addr, err := netip.ParseAddr(value); err == nil {
