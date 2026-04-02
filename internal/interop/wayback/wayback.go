@@ -29,11 +29,11 @@ func NewClient(baseURL string, timeout time.Duration) (*WaybackClient, error) {
 }
 
 func (c *WaybackClient) RequestSave(ctx context.Context, targetURL string) error {
-	escapedUrl := url.PathEscape(targetURL)
 	u := *c.baseURL
-	u.Path = path.Join(u.Path, "save", escapedUrl)
-	logger := logging.FromContext(ctx)
+	u.Path = path.Join(u.Path, "save")
+	u.Path = u.Path + "/" + targetURL
 
+	logger := logging.FromContext(ctx)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		logger.ErrorContext(ctx, "wayback: request error", "url", targetURL, "error", err)
@@ -52,6 +52,7 @@ func (c *WaybackClient) RequestSave(ctx context.Context, targetURL string) error
 
 	if resp.StatusCode >= 400 {
 		logger.ErrorContext(ctx, "wayback: save returned error", "status", resp.StatusCode, "url", targetURL)
+		return fmt.Errorf("wayback save failed with status %d", resp.StatusCode)
 	}
 	return nil
 }

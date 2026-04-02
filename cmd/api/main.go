@@ -87,7 +87,7 @@ func main() {
 		slog.Warn("TRUST_PROXY is enabled but TRUSTED_PROXIES is empty — all peers are trusted to set client IP headers")
 	}
 
-	waybackClient, err := wayback.NewClient("https://web.archive.org", 10*time.Second)
+	waybackClient, err := wayback.NewClient("https://web.archive.org", 30*time.Second)
 	if err != nil {
 		slog.Error("failed to create wayback client", "error", err)
 		os.Exit(1)
