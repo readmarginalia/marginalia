@@ -1,9 +1,10 @@
 package wayback
 
 import (
+	"context"
 	"fmt"
 	"io"
-	"log"
+	"marginalia/internal/telemetry/logging"
 	"net/http"
 	"net/url"
 	"path"
@@ -27,21 +28,22 @@ func NewClient(baseURL string, timeout time.Duration) (*WaybackClient, error) {
 	}, nil
 }
 
-func (c *WaybackClient) RequestSave(targetURL string) error {
+func (c *WaybackClient) RequestSave(ctx context.Context, targetURL string) error {
 	u := *c.baseURL
 	u.Path = path.Join(u.Path, "save")
 	u.Path = u.Path + "/" + targetURL
 
-	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	logger := logging.FromContext(ctx)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		log.Printf("wayback: request error for %s: %v", targetURL, err)
+		logger.ErrorContext(ctx, "wayback: request error", "url", targetURL, "error", err)
 		return err
 	}
 	req.Header.Set("User-Agent", "Marginalia/1.0")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		log.Printf("wayback: save failed for %s: %v", targetURL, err)
+		logger.ErrorContext(ctx, "wayback: save failed", "url", targetURL, "error", err)
 		return err
 	}
 	defer resp.Body.Close()
@@ -49,7 +51,7 @@ func (c *WaybackClient) RequestSave(targetURL string) error {
 	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode >= 400 {
-		log.Printf("wayback: save returned %d for %s", resp.StatusCode, targetURL)
+		logger.ErrorContext(ctx, "wayback: save returned error", "status", resp.StatusCode, "url", targetURL)
 		return fmt.Errorf("wayback save failed with status %d", resp.StatusCode)
 	}
 	return nil

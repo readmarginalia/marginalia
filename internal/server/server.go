@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
 	"marginalia/internal/auth"
 	"marginalia/internal/feed"
 	"marginalia/internal/infra/http"
@@ -13,6 +12,7 @@ import (
 	"marginalia/internal/recommendations"
 	"marginalia/internal/server/requests"
 	"marginalia/internal/server/responses"
+	"marginalia/internal/telemetry/logging"
 	stdhttp "net/http"
 	"strconv"
 	"time"
@@ -87,13 +87,11 @@ func handleAdd(app *App) stdhttp.HandlerFunc {
 			return
 		}
 
-		rec, err := app.Recommendations.Insert(recommendations.CreateOptions{URL: body.URL})
+		rec, err := app.Recommendations.Insert(r.Context(), recommendations.CreateOptions{URL: body.URL})
 		if err != nil {
 			http.WriteError(w, err)
 			return
 		}
-
-		log.Printf("added: %s — %s", body.URL, rec.Title)
 
 		response := responses.RecommendationAdded{Id: rec.ID, Title: rec.Title}
 
@@ -109,7 +107,7 @@ func handleDelete(app *App) stdhttp.HandlerFunc {
 			return
 		}
 
-		if err := app.Recommendations.Delete(id); err != nil {
+		if err := app.Recommendations.Delete(r.Context(), id); err != nil {
 			http.WriteError(w, err)
 			return
 		}
@@ -119,7 +117,7 @@ func handleDelete(app *App) stdhttp.HandlerFunc {
 
 func handleRSS(app *App) stdhttp.HandlerFunc {
 	return func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-		result, err := app.Feed.RenderRss(app.Owner)
+		result, err := app.Feed.RenderRss(r.Context(), app.Owner)
 		if err != nil {
 			http.JsonError(w, fmt.Sprintf("feed error: %v", err), stdhttp.StatusInternalServerError)
 			return
@@ -130,8 +128,10 @@ func handleRSS(app *App) stdhttp.HandlerFunc {
 		w.Header().Set("Last-Modified", result.LastModified.Format(stdhttp.TimeFormat))
 		w.Header().Set("Cache-Control", "no-store, must-revalidate")
 
-		log.Printf("rss: %s %s If-None-Match=%q If-Modified-Since=%q",
-			r.Method, r.URL, r.Header.Get("If-None-Match"), r.Header.Get("If-Modified-Since"))
+		logger := logging.FromContext(r.Context())
+		logger.InfoContext(r.Context(), "rss request",
+			"If-None-Match", r.Header.Get("If-None-Match"),
+			"If-Modified-Since", r.Header.Get("If-Modified-Since"))
 
 		if match := r.Header.Get("If-None-Match"); match == result.ETag {
 			w.WriteHeader(stdhttp.StatusNotModified)
@@ -197,7 +197,7 @@ type listItem struct {
 func handleList(app *App, title string, style string) stdhttp.HandlerFunc {
 	css := template.CSS(style)
 	return func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-		recs, err := app.Recommendations.All()
+		recs, err := app.Recommendations.All(r.Context())
 		if err != nil {
 			http.JsonError(w, err.Error(), stdhttp.StatusInternalServerError)
 			return
