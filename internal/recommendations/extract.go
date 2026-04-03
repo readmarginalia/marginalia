@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	readability "codeberg.org/readeck/go-readability/v2"
@@ -20,7 +21,9 @@ type Article struct {
 func extractFromURL(ctx context.Context, rawURL string) (*Article, error) {
 	ctx, span := tracer.Start(ctx, "extractFromURL")
 	defer span.End()
-	article, err := readability.FromURL(rawURL, 30*time.Second)
+	article, err := readability.FromURL(rawURL, 30*time.Second, func(r *http.Request) {
+		r.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Marginalia/1.0)")
+	})
 
 	if err != nil {
 		return nil, fmt.Errorf("extract article: %w", err)
