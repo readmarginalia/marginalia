@@ -74,7 +74,7 @@ func TestInsertConflictURLExists(t *testing.T) {
 		t.Fatal("Expected ServiceError")
 	}
 	if svcErr.Code != expectedStatusCode {
-		t.Fatalf("Expected %d on URL exists, got %d - " + svcErr.Reason, expectedStatusCode, svcErr.Code)
+		t.Fatalf("Expected %d on URL exists, got %d - %s", expectedStatusCode, svcErr.Code, svcErr.Reason)
 	}
 }
 
@@ -95,4 +95,24 @@ func TestDelete(t *testing.T) {
 	}
 
 	service.Delete(r.ID)
+}
+
+func TestAll(t *testing.T) {
+	service := initializeService(t)
+
+	for _, u := range []string{testUrl, testUrl2} {
+		_, err := service.Insert(CreateOptions{URL: u})
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+	}
+
+	rs, err := service.All()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	if len(rs) != 2 {
+		t.Fatalf("Expected 2, found %d", len(rs))
+	}
 }
