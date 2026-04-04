@@ -54,7 +54,7 @@ func TestInsertBadRequestEmptyURL(t *testing.T) {
 		t.Fatal("Expected ServiceError")
 	}
 	if svcErr.Code != expectedStatusCode {
-		t.Fatalf("Expected %d on empty URL, got %d - %s", expectedStatusCode, svcErr.Code, svcErr.Reason)
+		t.Fatalf("Expected %d on empty URL, got %+v", expectedStatusCode, svcErr)
 	}
 }
 
@@ -74,7 +74,7 @@ func TestInsertConflictURLExists(t *testing.T) {
 		t.Fatal("Expected ServiceError")
 	}
 	if svcErr.Code != expectedStatusCode {
-		t.Fatalf("Expected %d on URL exists, got %d - %s", expectedStatusCode, svcErr.Code, svcErr.Reason)
+		t.Fatalf("Expected %d on URL exists, got %+v", expectedStatusCode, svcErr)
 	}
 }
 
@@ -113,6 +113,6 @@ func TestAll(t *testing.T) {
 	}
 
 	if len(rs) != 2 {
-		t.Fatalf("Expected 2, found %d", len(rs))
+		t.Fatalf("Expected 1, found %d", len(rs))
 	}
 }
