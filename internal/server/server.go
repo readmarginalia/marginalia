@@ -232,15 +232,30 @@ func handleList(app *App, title string, style string) stdhttp.HandlerFunc {
 	}
 }
 
+const (
+	rssPath             = "/rss"
+	peerProtocolVersion = "1"
+)
+
+func requestScheme(r *stdhttp.Request) string {
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto == "https" {
+		return "https"
+	}
+	if r.TLS != nil {
+		return "https"
+	}
+	return "http"
+}
+
 func handlePeerInfo(app *App) stdhttp.HandlerFunc {
 	return func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(peers.PeerInfo{
+		rssURL := requestScheme(r) + "://" + r.Host + rssPath
+		http.JsonResponse(w, peers.PeerInfo{
 			PublicKey: app.Identity.EncodedPublicKey(),
 			Owner:     app.Owner,
-			RSSUrl:    "/rss",
-			Version:   "1",
-		})
+			RSSUrl:    rssURL,
+			Version:   peerProtocolVersion,
+		}, stdhttp.StatusOK)
 	}
 }
 
@@ -251,14 +266,7 @@ func handlePeerKnown(app *App) stdhttp.HandlerFunc {
 			http.WriteError(w, err)
 			return
 		}
-
-		known := make([]peers.KnownPeer, len(trusted))
-		for i, p := range trusted {
-			known[i] = peers.KnownPeer{Endpoint: p.Endpoint, PublicKey: p.PublicKey}
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(known)
+		http.JsonResponse(w, peers.ToKnownList(trusted), stdhttp.StatusOK)
 	}
 }
 
@@ -281,10 +289,7 @@ func handlePeerSubscribe(app *App) stdhttp.HandlerFunc {
 			http.WriteError(w, err)
 			return
 		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(stdhttp.StatusCreated)
-		json.NewEncoder(w).Encode(peer)
+		http.JsonResponse(w, peer, stdhttp.StatusCreated)
 	}
 }
 
@@ -295,9 +300,7 @@ func handlePeerList(app *App) stdhttp.HandlerFunc {
 			http.WriteError(w, err)
 			return
 		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(all)
+		http.JsonResponse(w, all, stdhttp.StatusOK)
 	}
 }
 

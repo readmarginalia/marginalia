@@ -2,77 +2,34 @@ package peers
 
 import (
 	"context"
-	"crypto/ed25519"
-	"encoding/json"
 	"fmt"
-	"io"
 	"marginalia/internal/common"
 	"marginalia/internal/identity"
 	"marginalia/internal/telemetry/logging"
 	"net"
-	"net/http"
 	"strings"
 	"time"
 )
 
-// PeerInfo is the JSON payload returned by GET /peer/info on a remote peer.
-type PeerInfo struct {
-	PublicKey string `json:"public_key"`
-	Owner     string `json:"owner"`
-	RSSUrl    string `json:"rss_url"`
-	Version   string `json:"version"`
-}
+const maxPEXPeers = 100
 
-// KnownPeer is a single entry in the PEX exchange list returned by GET /peer/known.
-type KnownPeer struct {
-	Endpoint  string `json:"endpoint"`
-	PublicKey string `json:"public_key"`
+// HTTPClient is the interface for fetching data from remote Marginalia peer nodes.
+// The concrete implementation lives in internal/interop/peerclient.
+type HTTPClient interface {
+	FetchInfo(ctx context.Context, endpoint string) (*PeerInfo, error)
+	FetchKnown(ctx context.Context, endpoint string) ([]KnownPeer, error)
 }
-
-const (
-	maxPeerInfoSize = 1 << 20  // 1 MB
-	maxPeerKnownSize = 5 << 20 // 5 MB
-	maxPEXPeers     = 100
-)
 
 type Service struct {
-	repo     *Repository
-	identity *identity.Identity
-	client   *http.Client
+	repo       *Repository
+	httpClient HTTPClient
 }
 
-func NewService(repo *Repository, id *identity.Identity) *Service {
+func NewService(repo *Repository, httpClient HTTPClient) *Service {
 	return &Service{
-		repo:     repo,
-		identity: id,
-		client: &http.Client{
-			Timeout: 10 * time.Second,
-			Transport: &http.Transport{
-				DialContext: secureDialContext,
-			},
-		},
+		repo:       repo,
+		httpClient: httpClient,
 	}
-}
-
-// secureDialContext closes the DNS rebinding TOCTOU gap
-func secureDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return nil, err
-	}
-	ips, err := resolveAndCheck(ctx, host)
-	if err != nil {
-		return nil, err
-	}
-	var lastErr error
-	for _, ip := range ips {
-		conn, err := (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
-		if err == nil {
-			return conn, nil
-		}
-		lastErr = err
-	}
-	return nil, lastErr
 }
 
 // Subscribe performs the TOFU handshake + PEX with a remote peer.
@@ -85,8 +42,7 @@ func (s *Service) Subscribe(ctx context.Context, endpoint string) (*Peer, error)
 		return nil, common.ServiceError{Reason: err.Error(), Code: 400}
 	}
 
-	// fetch the peer's identity
-	info, err := s.fetchPeerInfo(ctx, endpoint)
+	info, err := s.httpClient.FetchInfo(ctx, endpoint)
 	if err != nil {
 		logger.ErrorContext(ctx, "handshake failed", "endpoint", endpoint, "error", err)
 		return nil, common.ServiceError{Reason: "handshake failed", Code: 502}
@@ -120,6 +76,7 @@ func (s *Service) Subscribe(ctx context.Context, endpoint string) (*Peer, error)
 	go func() {
 		bctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
+		bctx = logging.WithLogger(bctx, logger)
 		s.exchangePeers(bctx, endpoint)
 	}()
 
@@ -159,64 +116,12 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (s *Service) fetchPeerInfo(ctx context.Context, endpoint string) (*PeerInfo, error) {
-	url := endpoint + "/peer/info"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
-	}
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("connect: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("peer returned %d", resp.StatusCode)
-	}
-
-	var info PeerInfo
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxPeerInfoSize)).Decode(&info); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-	if info.PublicKey == "" {
-		return nil, fmt.Errorf("peer returned empty public key")
-	}
-
-	keyBytes, err := identity.Decode(info.PublicKey)
-	if err != nil || len(keyBytes) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("peer returned invalid public key")
-	}
-
-	return &info, nil
-}
-
 func (s *Service) exchangePeers(ctx context.Context, endpoint string) {
 	logger := logging.FromContext(ctx)
 
-	url := endpoint + "/peer/known"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	known, err := s.httpClient.FetchKnown(ctx, endpoint)
 	if err != nil {
-		logger.DebugContext(ctx, "PEX request build failed", "endpoint", endpoint, "error", err)
-		return
-	}
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		logger.DebugContext(ctx, "PEX fetch failed", "endpoint", endpoint, "error", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		logger.DebugContext(ctx, "PEX returned non-OK status", "endpoint", endpoint, "status", resp.StatusCode)
-		return
-	}
-
-	var known []KnownPeer
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxPeerKnownSize)).Decode(&known); err != nil {
-		logger.DebugContext(ctx, "PEX decode failed", "endpoint", endpoint, "error", err)
+		logger.WarnContext(ctx, "PEX fetch failed, peer graph will not grow", "endpoint", endpoint, "error", err)
 		return
 	}
 
@@ -231,12 +136,10 @@ func (s *Service) exchangePeers(ctx context.Context, endpoint string) {
 			continue
 		}
 		// Validate key format
-		keyBytes, err := identity.Decode(kp.PublicKey)
-		if err != nil || len(keyBytes) != ed25519.PublicKeySize {
+		if _, err := identity.ParsePublicKey(kp.PublicKey); err != nil {
 			logger.DebugContext(ctx, "PEX skipped invalid key", "from", endpoint, "key", kp.PublicKey)
 			continue
 		}
-		// Validate endpoint against SSRF
 		normalized := normalizeEndpoint(kp.Endpoint)
 		if err := validateEndpoint(ctx, normalized); err != nil {
 			logger.DebugContext(ctx, "PEX skipped invalid endpoint", "from", endpoint, "peer_endpoint", kp.Endpoint, "reason", err)
@@ -251,10 +154,12 @@ func (s *Service) exchangePeers(ctx context.Context, endpoint string) {
 
 	if added > 0 {
 		logger.InfoContext(ctx, "PEX discovered new peers", "from", endpoint, "count", added)
+	} else if len(known) > 0 {
+		logger.WarnContext(ctx, "PEX received peers but none were persisted", "from", endpoint, "received", len(known))
 	}
 }
 
-// normalizeEndpoint ensures the endpoint has a port, defaulting to 9595.
+// normalizeEndpoint ensures the endpoint has a scheme and port, defaulting to 9595.
 func normalizeEndpoint(endpoint string) string {
 	endpoint = strings.TrimSpace(endpoint)
 	endpoint = strings.TrimRight(endpoint, "/")
@@ -270,33 +175,14 @@ func normalizeEndpoint(endpoint string) string {
 	}
 
 	if _, _, err := net.SplitHostPort(hostport); err != nil {
+		// Bare IPv6 address (e.g. "2001:db8::1") has no brackets and no port;
+		// wrap it so SplitHostPort can parse it after we append the default port.
+		if strings.Contains(hostport, ":") && !strings.HasPrefix(hostport, "[") {
+			hostport = "[" + hostport + "]"
+		}
 		hostport += ":9595"
 	}
 	return scheme + "://" + hostport
-}
-
-func resolveAndCheck(ctx context.Context, host string) ([]net.IP, error) {
-	if host == "localhost" {
-		return nil, fmt.Errorf("cannot subscribe to localhost")
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		return []net.IP{ip}, checkIP(ip)
-	}
-	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-	if err != nil {
-		return nil, fmt.Errorf("cannot resolve endpoint: %w", err)
-	}
-	if len(addrs) == 0 {
-		return nil, fmt.Errorf("no addresses for %s", host)
-	}
-	ips := make([]net.IP, 0, len(addrs))
-	for _, a := range addrs {
-		if err := checkIP(a.IP); err != nil {
-			return nil, err
-		}
-		ips = append(ips, a.IP)
-	}
-	return ips, nil
 }
 
 // validateEndpoint rejects loopback, private, and link-local addresses.
@@ -309,13 +195,6 @@ func validateEndpoint(ctx context.Context, endpoint string) error {
 	if err != nil {
 		return fmt.Errorf("invalid endpoint: %w", err)
 	}
-	_, err = resolveAndCheck(ctx, host)
+	_, err = common.ResolveAndCheck(ctx, host)
 	return err
-}
-
-func checkIP(ip net.IP) error {
-	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
-		return fmt.Errorf("cannot subscribe to private or reserved address")
-	}
-	return nil
 }

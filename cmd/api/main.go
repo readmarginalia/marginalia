@@ -12,6 +12,7 @@ import (
 	"marginalia/internal/feed"
 	"marginalia/internal/identity"
 	"marginalia/internal/infra/db"
+	"marginalia/internal/interop/peerclient"
 	"marginalia/internal/interop/wayback"
 	"marginalia/internal/peers"
 	"marginalia/internal/recommendations"
@@ -108,7 +109,7 @@ func main() {
 	feedService := feed.NewService(recommendationsService)
 
 	peerRepo := peers.NewRepository(database)
-	peerService := peers.NewService(peerRepo, nodeIdentity)
+	peerService := peers.NewService(peerRepo, peerclient.New(10*time.Second))
 
 	app := &server.App{
 		AuthConfig:      &auth,

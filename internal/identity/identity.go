@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 )
 
 // Identity holds the node's Ed25519 keypair.
@@ -39,6 +40,19 @@ func (id *Identity) EncodedPublicKey() string {
 // Sign signs data with the node's private key.
 func (id *Identity) Sign(data []byte) []byte {
 	return ed25519.Sign(id.PrivateKey, data)
+}
+
+// ParsePublicKey decodes a base64url string and validates it is a well-formed
+// Ed25519 public key. Returns an error if the string is malformed or the wrong length.
+func ParsePublicKey(s string) (ed25519.PublicKey, error) {
+	b, err := Decode(s)
+	if err != nil {
+		return nil, fmt.Errorf("decode public key: %w", err)
+	}
+	if len(b) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("invalid public key length %d", len(b))
+	}
+	return ed25519.PublicKey(b), nil
 }
 
 // Verify checks a signature against a raw public key and data.

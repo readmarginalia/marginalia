@@ -23,7 +23,7 @@ func scanPeer(row interface{ Scan(...any) error }) (*Peer, error) {
 
 func collectPeers(rows *sql.Rows) ([]Peer, error) {
 	defer rows.Close()
-	var peers []Peer
+	peers := []Peer{}
 	for rows.Next() {
 		p, err := scanPeer(rows)
 		if err != nil {
@@ -66,9 +66,9 @@ func (r *Repository) SetTrusted(ctx context.Context, endpoint, publicKey, owner 
 			status     = ?,
 			pinned_at  = COALESCE(peers.pinned_at, excluded.pinned_at)
 		RETURNING id, endpoint, public_key, owner, status, pinned_at, last_seen, added_at
-	`, endpoint, publicKey, owner, string(StatusTrusted), now,
-		string(StatusTrusted),
-		string(StatusTrusted),
+	`, endpoint, publicKey, owner, StatusTrusted, now,
+		StatusTrusted,
+		StatusTrusted,
 	)
 	p, err := scanPeer(row)
 	if err != nil {
@@ -83,7 +83,7 @@ func (r *Repository) AddDiscovered(ctx context.Context, endpoint, publicKey stri
 		INSERT INTO peers (endpoint, public_key, status)
 		VALUES (?, ?, ?)
 		ON CONFLICT(endpoint) DO NOTHING
-	`, endpoint, publicKey, string(StatusDiscovered))
+	`, endpoint, publicKey, StatusDiscovered)
 	if err != nil {
 		return fmt.Errorf("add discovered peer: %w", err)
 	}
@@ -105,7 +105,7 @@ func (r *Repository) All(ctx context.Context) ([]Peer, error) {
 func (r *Repository) Trusted(ctx context.Context) ([]Peer, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, endpoint, public_key, owner, status, pinned_at, last_seen, added_at FROM peers WHERE status = ? ORDER BY added_at DESC`,
-		string(StatusTrusted),
+		StatusTrusted,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list trusted peers: %w", err)
