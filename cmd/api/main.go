@@ -10,8 +10,10 @@ import (
 	"marginalia/internal/auth"
 	"marginalia/internal/common"
 	"marginalia/internal/feed"
+	"marginalia/internal/identity"
 	"marginalia/internal/infra/db"
 	"marginalia/internal/interop/wayback"
+	"marginalia/internal/peers"
 	"marginalia/internal/recommendations"
 	"marginalia/internal/server"
 	"marginalia/internal/telemetry"
@@ -92,9 +94,21 @@ func main() {
 		slog.Error("failed to create wayback client", "error", err)
 		os.Exit(1)
 	}
+
+	identityService := identity.NewService(identity.NewRepository(database))
+	nodeIdentity, err := identityService.Bootstrap(ctx)
+	if err != nil {
+		slog.Error("failed to bootstrap identity", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("node identity ready", "public_key", nodeIdentity.EncodedPublicKey())
+
 	repository := recommendations.NewRepository(database)
 	recommendationsService := recommendations.NewService(repository, waybackClient)
 	feedService := feed.NewService(recommendationsService)
+
+	peerRepo := peers.NewRepository(database)
+	peerService := peers.NewService(peerRepo, nodeIdentity)
 
 	app := &server.App{
 		AuthConfig:      &auth,
@@ -103,6 +117,8 @@ func main() {
 		Theme:           theme,
 		Feed:            feedService,
 		Recommendations: recommendationsService,
+		Identity:        nodeIdentity,
+		Peers:           peerService,
 	}
 
 	appHandler := tracing.AddTraceContext(

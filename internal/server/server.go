@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"marginalia/internal/auth"
 	"marginalia/internal/feed"
+	"marginalia/internal/identity"
 	"marginalia/internal/infra/http"
 	"marginalia/internal/interop/wayback"
+	"marginalia/internal/peers"
 	"marginalia/internal/recommendations"
 	"marginalia/internal/server/requests"
 	"marginalia/internal/server/responses"
@@ -32,6 +35,8 @@ type App struct {
 	Theme           string
 	Feed            *feed.Service
 	Recommendations *recommendations.Service
+	Identity        *identity.Identity
+	Peers           *peers.Service
 }
 
 func ownerTitle(owner string) string {
@@ -70,8 +75,13 @@ func New(app *App) stdhttp.Handler {
 		r.Use(auth.TokenAuth(authConfig, limiter))
 		r.Post("/recommend", handleAdd(app))
 		r.Delete("/recommend/{id}", handleDelete(app))
+		r.Post("/peer/subscribe", handlePeerSubscribe(app))
+		r.Get("/peers", handlePeerList(app))
+		r.Delete("/peers/{id}", handlePeerDelete(app))
 	})
 
+	r.Get("/peer/info", handlePeerInfo(app))
+	r.Get("/peer/known", handlePeerKnown(app))
 	r.Get("/rss", handleRSS(app))
 	r.Get("/", handleList(app, title, app.Theme))
 
@@ -219,5 +229,90 @@ func handleList(app *App, title string, style string) stdhttp.HandlerFunc {
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		listTmpl.Execute(w, listPage{Title: title, Style: css, Items: items})
+	}
+}
+
+func handlePeerInfo(app *App) stdhttp.HandlerFunc {
+	return func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(peers.PeerInfo{
+			PublicKey: app.Identity.EncodedPublicKey(),
+			Owner:     app.Owner,
+			RSSUrl:    "/rss",
+			Version:   "1",
+		})
+	}
+}
+
+func handlePeerKnown(app *App) stdhttp.HandlerFunc {
+	return func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		trusted, err := app.Peers.Trusted(r.Context())
+		if err != nil {
+			http.WriteError(w, err)
+			return
+		}
+
+		known := make([]peers.KnownPeer, len(trusted))
+		for i, p := range trusted {
+			known[i] = peers.KnownPeer{Endpoint: p.Endpoint, PublicKey: p.PublicKey}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(known)
+	}
+}
+
+func handlePeerSubscribe(app *App) stdhttp.HandlerFunc {
+	return func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		var body struct {
+			Endpoint string `json:"endpoint"`
+		}
+		if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body); err != nil {
+			http.JsonError(w, "invalid request body", stdhttp.StatusBadRequest)
+			return
+		}
+		if body.Endpoint == "" {
+			http.JsonError(w, "endpoint is required", stdhttp.StatusBadRequest)
+			return
+		}
+
+		peer, err := app.Peers.Subscribe(r.Context(), body.Endpoint)
+		if err != nil {
+			http.WriteError(w, err)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(stdhttp.StatusCreated)
+		json.NewEncoder(w).Encode(peer)
+	}
+}
+
+func handlePeerList(app *App) stdhttp.HandlerFunc {
+	return func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		all, err := app.Peers.All(r.Context())
+		if err != nil {
+			http.WriteError(w, err)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(all)
+	}
+}
+
+func handlePeerDelete(app *App) stdhttp.HandlerFunc {
+	return func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+		if err != nil {
+			http.JsonError(w, "invalid id", stdhttp.StatusBadRequest)
+			return
+		}
+
+		if err := app.Peers.Delete(r.Context(), id); err != nil {
+			http.WriteError(w, err)
+			return
+		}
+		w.WriteHeader(stdhttp.StatusNoContent)
 	}
 }

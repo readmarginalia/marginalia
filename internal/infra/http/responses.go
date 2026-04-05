@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"marginalia/internal/common"
 	"net/http"
 )
@@ -26,5 +27,6 @@ func WriteError(w http.ResponseWriter, err error) {
 		return
 	}
 
+	slog.Error("unhandled error in HTTP handler", "error", err)
 	JsonError(w, "internal server error", http.StatusInternalServerError)
 }
