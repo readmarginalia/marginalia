@@ -13,7 +13,7 @@ func NewRepository(db *sql.DB) *Repository {
 	return &Repository{db: db}
 }
 
-func (r *Repository) Insert(ctx context.Context, url, title, byline, excerpt, content, siteName string) (*Recommendation, bool, error) {
+func (r *Repository) Insert(ctx context.Context, url, title, byline, excerpt, content, siteName string) (Recommendation, bool, error) {
 	rec := Recommendation{}
 
 	err := r.db.QueryRowContext(ctx, `
@@ -35,12 +35,12 @@ func (r *Repository) Insert(ctx context.Context, url, title, byline, excerpt, co
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, false, nil
+			return Recommendation{}, false, nil
 		}
-		return nil, false, err
+		return Recommendation{}, false, err
 	}
 
-	return &rec, true, nil
+	return rec, true, nil
 }
 
 func (r *Repository) Delete(ctx context.Context, id int64) (bool, error) {

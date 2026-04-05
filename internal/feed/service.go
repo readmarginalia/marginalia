@@ -3,7 +3,9 @@ package feed
 import (
 	"context"
 	"crypto/sha256"
+	"html"
 	"marginalia/internal/common"
+	"marginalia/internal/interop/wayback"
 	"marginalia/internal/recommendations"
 	"marginalia/internal/telemetry/logging"
 	"time"
@@ -32,13 +34,15 @@ func (s *Service) RenderRss(ctx context.Context, owner string) (*RssOutput, erro
 
 	items := make([]Item, len(recs))
 	for i, r := range recs {
+		addedAt := time.Unix(r.AddedAt, 0).UTC()
+		cacheURL := wayback.URL(addedAt, r.URL)
 		items[i] = Item{
 			Title:          r.Title,
 			Link:           r.URL,
 			Description:    r.Excerpt,
-			ContentEncoded: r.Content,
+			ContentEncoded: r.Content + `<br><hr><p><i><a href="` + html.EscapeString(cacheURL) + `">View Archived Snapshot</a></i></p>`,
 			Author:         r.Byline,
-			PubDate:        time.Unix(r.AddedAt, 0).UTC().Format(time.RFC1123Z),
+			PubDate:        addedAt.Format(time.RFC1123Z),
 			GUID:           r.URL,
 		}
 	}

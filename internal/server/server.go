@@ -10,15 +10,23 @@ import (
 	"marginalia/internal/feed"
 	"marginalia/internal/identity"
 	"marginalia/internal/infra/http"
+	"marginalia/internal/interop/wayback"
 	"marginalia/internal/peers"
 	"marginalia/internal/recommendations"
+	"marginalia/internal/server/requests"
+	"marginalia/internal/server/responses"
 	"marginalia/internal/telemetry/logging"
 	stdhttp "net/http"
 	"strconv"
 	"time"
 
+	_ "embed"
+
 	"github.com/go-chi/chi/v5"
 )
+
+//go:embed resources/images/building.columns.fill.svg
+var cacheIcon string
 
 type App struct {
 	AuthConfig      *auth.AuthConfig
@@ -82,23 +90,22 @@ func New(app *App) stdhttp.Handler {
 
 func handleAdd(app *App) stdhttp.HandlerFunc {
 	return func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-		var body struct {
-			URL string `json:"url"`
-		}
+
+		var body requests.AddRecommendation
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.URL == "" {
 			http.JsonError(w, "missing or invalid url", stdhttp.StatusBadRequest)
 			return
 		}
 
-		rec, err := app.Recommendations.Insert(r.Context(), &recommendations.CreateOptions{URL: body.URL})
+		rec, err := app.Recommendations.Insert(r.Context(), recommendations.CreateOptions{URL: body.URL})
 		if err != nil {
 			http.WriteError(w, err)
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(stdhttp.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{"id": rec.ID, "title": rec.Title})
+		response := responses.RecommendationAdded{Id: rec.ID, Title: rec.Title}
+
+		http.JsonResponse(w, response, stdhttp.StatusCreated)
 	}
 }
 
@@ -171,7 +178,7 @@ var listTmpl = template.Must(template.New("list").Parse(`<!DOCTYPE html>
 <ul>
 {{range .Items}}<li>
   <a href="{{.URL}}">{{.Title}}</a>
-  <div class="meta">{{if .Byline}}{{.Byline}}{{end}}{{if and .Byline .SiteName}} · {{end}}{{.SiteName}}{{if or .Byline .SiteName}} · {{end}}{{.AddedAtFmt}}</div>
+  <div class="meta">{{if .Byline}}{{.Byline}}{{end}}{{if and .Byline .SiteName}} · {{end}}{{.SiteName}}{{if or .Byline .SiteName}} · {{end}}{{.AddedAtFmt}}{{if .CacheURL}} · <a href="{{.CacheURL}}" target="_blank" rel="noopener noreferrer" title="Cached snapshot" style="color:inherit"><span style="display:inline-flex;align-items:center;width:14px;height:14px;vertical-align:-0.15em">{{.CacheIcon}}</span></a>{{end}}</div>
 </li>
 {{else}}<li class="empty">Nothing here yet.</li>
 {{end}}</ul>
@@ -193,6 +200,8 @@ type listItem struct {
 	Byline     string
 	SiteName   string
 	AddedAtFmt string
+	CacheURL   string
+	CacheIcon  template.HTML
 }
 
 func handleList(app *App, title string, style string) stdhttp.HandlerFunc {
@@ -206,12 +215,15 @@ func handleList(app *App, title string, style string) stdhttp.HandlerFunc {
 
 		items := make([]listItem, len(recs))
 		for i, r := range recs {
+			addedAt := time.Unix(r.AddedAt, 0).UTC()
 			items[i] = listItem{
 				URL:        r.URL,
 				Title:      r.Title,
 				Byline:     r.Byline,
 				SiteName:   r.SiteName,
-				AddedAtFmt: time.Unix(r.AddedAt, 0).UTC().Format("Jan 2, 2006"),
+				CacheURL:   wayback.URL(addedAt, r.URL),
+				CacheIcon:  template.HTML(cacheIcon),
+				AddedAtFmt: addedAt.Format("Jan 2, 2006"),
 			}
 		}
 

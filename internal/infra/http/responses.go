@@ -8,6 +8,12 @@ import (
 	"net/http"
 )
 
+func JsonResponse(w http.ResponseWriter, data any, code int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(data)
+}
+
 func JsonError(w http.ResponseWriter, msg string, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
