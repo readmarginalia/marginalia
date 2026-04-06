@@ -2,6 +2,7 @@ package recommendations
 
 import (
 	"context"
+	"fmt"
 	"marginalia/internal/common"
 	"marginalia/internal/interop/wayback"
 	"marginalia/internal/telemetry/logging"
@@ -20,11 +21,13 @@ type CreateOptions struct {
 	URL string `json:"url"`
 }
 
+const componentName = "recommendations.service"
+
 func (s *Service) Insert(ctx context.Context, options CreateOptions) (Recommendation, error) {
 	ctx, span := tracer.Start(ctx, "service.Insert")
 	defer span.End()
 
-	logger := logging.FromContext(ctx)
+	logger := logging.WithComponent(ctx, componentName)
 
 	if options.URL == "" {
 		logger.ErrorContext(ctx,
@@ -62,7 +65,7 @@ func (s *Service) Insert(ctx context.Context, options CreateOptions) (Recommenda
 	}
 
 	logger.InfoContext(ctx,
-		"added recommendation",
+		fmt.Sprintf("added recomemendation [ %s ]", rec.Title),
 		"url", options.URL,
 		"title", rec.Title)
 
@@ -71,10 +74,8 @@ func (s *Service) Insert(ctx context.Context, options CreateOptions) (Recommenda
 
 func (s *Service) waybackSave(ctx context.Context, url string) {
 	go func(ctx context.Context, url string) {
-		logger := logging.FromContext(ctx)
-		bgctx := context.Background()
-		bgctx = logging.WithLogger(bgctx, logger)
-		if err := s.wayback.RequestSave(bgctx, url); err != nil {
+		logger := logging.WithComponent(ctx, componentName)
+		if err := s.wayback.RequestSave(context.Background(), url); err != nil {
 			logger.Error("wayback save failed", "error", err, "url", url)
 		}
 	}(ctx, url)
@@ -84,7 +85,8 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	ctx, span := tracer.Start(ctx, "service.Delete")
 	defer span.End()
 
-	logger := logging.FromContext(ctx)
+	logger := logging.WithComponent(ctx, componentName)
+
 	found, err := s.repo.Delete(ctx, id)
 	if err != nil {
 		logger.ErrorContext(ctx,
@@ -109,7 +111,7 @@ func (s *Service) All(ctx context.Context) ([]Recommendation, error) {
 	ctx, span := tracer.Start(ctx, "service.All")
 	defer span.End()
 
-	logger := logging.FromContext(ctx)
+	logger := logging.WithComponent(ctx, componentName)
 	recs, err := s.repo.All(ctx)
 	if err != nil {
 		logger.ErrorContext(ctx,

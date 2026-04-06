@@ -22,8 +22,10 @@ func NewService(recommendations *recommendations.Service) *Service {
 	return &Service{recommendations: recommendations}
 }
 
+const componentName = "feed.service"
+
 func (s *Service) RenderRss(ctx context.Context, owner string) (*RssOutput, error) {
-	logger := logging.FromContext(ctx)
+	logger := logging.WithComponent(ctx, componentName)
 	recs, err := s.recommendations.All(ctx)
 	if err != nil {
 		logger.ErrorContext(ctx,

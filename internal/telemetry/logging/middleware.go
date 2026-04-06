@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -23,7 +24,7 @@ func AddRequestLogging(next http.Handler) http.Handler {
 		logger := slog.Default().With(attrs...)
 		ctx := WithLogger(r.Context(), logger)
 		r = r.WithContext(ctx)
-		logger.InfoContext(ctx, "request started")
+		logger.InfoContext(ctx, fmt.Sprintf("request starting: %s: %s ", r.Method, r.URL.Path))
 
 		next.ServeHTTP(ww, r)
 
@@ -31,7 +32,7 @@ func AddRequestLogging(next http.Handler) http.Handler {
 		status := ww.Status()
 		size := ww.BytesWritten()
 
-		logger.InfoContext(ctx, "request completed",
+		logger.InfoContext(ctx, fmt.Sprintf("request completed in %vms, Status: %d", duration.Milliseconds(), status),
 			"status", status,
 			"request.duration", duration.Milliseconds(),
 			"response.size.bytes", size,

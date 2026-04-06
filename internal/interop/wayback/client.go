@@ -16,6 +16,8 @@ type WaybackClient struct {
 	client  *http.Client
 }
 
+const componentName = "wayback.client"
+
 func NewClient(baseURL string, timeout time.Duration) (*WaybackClient, error) {
 	u, err := url.Parse(baseURL)
 	if err != nil {
@@ -29,11 +31,14 @@ func NewClient(baseURL string, timeout time.Duration) (*WaybackClient, error) {
 }
 
 func (c *WaybackClient) RequestSave(ctx context.Context, targetURL string) error {
+	ctx, endSpan := beginSaveSpan(ctx, targetURL)
+	defer endSpan()
+
 	u := *c.baseURL
 	u.Path = path.Join(u.Path, "save")
 	u.Path = u.Path + "/" + targetURL
 
-	logger := logging.FromContext(ctx)
+	logger := logging.WithComponent(ctx, componentName)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		logger.ErrorContext(ctx, "wayback: request error", "url", targetURL, "error", err)
