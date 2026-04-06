@@ -1,9 +1,10 @@
 package wayback
 
 import (
+	"context"
 	"fmt"
 	"io"
-	"log"
+	"marginalia/internal/telemetry/logging"
 	"net/http"
 	"net/url"
 	"path"
@@ -14,6 +15,8 @@ type WaybackClient struct {
 	baseURL *url.URL
 	client  *http.Client
 }
+
+const componentName = "wayback.client"
 
 func NewClient(baseURL string, timeout time.Duration) (*WaybackClient, error) {
 	u, err := url.Parse(baseURL)
@@ -27,21 +30,30 @@ func NewClient(baseURL string, timeout time.Duration) (*WaybackClient, error) {
 	}, nil
 }
 
-func (c *WaybackClient) RequestSave(targetURL string) error {
+func (c *WaybackClient) RequestSave(ctx context.Context, targetURL string) error {
+	ctx, endSpan := beginSaveSpan(ctx, targetURL)
+	defer endSpan()
+
+	start := time.Now()
+
 	u := *c.baseURL
 	u.Path = path.Join(u.Path, "save")
 	u.Path = u.Path + "/" + targetURL
 
-	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	logger := logging.WithComponent(ctx, componentName)
+	logger.InfoContext(ctx, "sending save request to wayback", "url", targetURL)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		log.Printf("wayback: request error for %s: %v", targetURL, err)
+		logger.ErrorContext(ctx, "wayback: request error", "url", targetURL, "error", err)
 		return err
 	}
 	req.Header.Set("User-Agent", "Marginalia/1.0")
 
 	resp, err := c.client.Do(req)
+	elapsed := time.Since(start)
 	if err != nil {
-		log.Printf("wayback: save failed for %s: %v", targetURL, err)
+		logger.ErrorContext(ctx, "wayback: save failed", "url", targetURL, "error", err, "elapsed", elapsed.Milliseconds())
 		return err
 	}
 	defer resp.Body.Close()
@@ -49,9 +61,11 @@ func (c *WaybackClient) RequestSave(targetURL string) error {
 	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode >= 400 {
-		log.Printf("wayback: save returned %d for %s", resp.StatusCode, targetURL)
+		logger.ErrorContext(ctx, "wayback: save returned error", "status", resp.StatusCode, "url", targetURL, "elapsed", elapsed.Milliseconds())
 		return fmt.Errorf("wayback save failed with status %d", resp.StatusCode)
 	}
+
+	logger.InfoContext(ctx, "wayback save successful", "url", targetURL, "elapsed", elapsed.Milliseconds())
 	return nil
 }
 

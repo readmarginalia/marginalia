@@ -1,24 +1,53 @@
 package main
 
 import (
-	"log"
+	"context"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
 	"marginalia/internal/auth"
 	"marginalia/internal/common"
+	"marginalia/internal/correlation"
 	"marginalia/internal/feed"
 	"marginalia/internal/infra/db"
 	"marginalia/internal/interop/wayback"
 	"marginalia/internal/recommendations"
 	"marginalia/internal/server"
+	"marginalia/internal/telemetry"
+	"marginalia/internal/telemetry/logging"
+	"marginalia/internal/telemetry/tracing"
 )
 
 func main() {
+	ctx := context.Background()
+	res, err := telemetry.BuildResource()
+	if err != nil {
+		slog.Error("failed to build resource", "error", err)
+		os.Exit(1)
+	}
+
+	logger, shutdownLogs, err := logging.CreateLogger(ctx, res)
+	if err != nil {
+		slog.Error("failed to create logger", "error", err)
+		os.Exit(1)
+	}
+	defer shutdownLogs(ctx)
+
+	slog.SetDefault(logger)
+
+	shutdownTracing, err := tracing.SetupTracing(ctx, res)
+	if err != nil {
+		slog.Error("failed to setup tracing", "error", err)
+		os.Exit(1)
+	}
+	defer shutdownTracing(ctx)
+
 	token := os.Getenv("TOKEN")
 	if token == "" {
-		log.Fatal("TOKEN is required")
+		slog.Error("TOKEN is required")
+		os.Exit(1)
 	}
 
 	owner := os.Getenv("OWNER")
@@ -26,7 +55,8 @@ func main() {
 
 	theme, err := server.LoadTheme(themeName)
 	if err != nil {
-		log.Fatalf("failed to load theme: %v", err)
+		slog.Error("failed to load theme", "error", err)
+		os.Exit(1)
 	}
 
 	port := os.Getenv("PORT")
@@ -41,7 +71,8 @@ func main() {
 
 	database, err := db.Open(dbPath)
 	if err != nil {
-		log.Fatalf("failed to open database: %v", err)
+		slog.Error("failed to open database", "error", err)
+		os.Exit(1)
 	}
 	defer database.Close()
 
@@ -54,12 +85,13 @@ func main() {
 	}
 
 	if auth.TrustProxy && len(auth.TrustedProxyRanges) == 0 {
-		log.Println("WARNING: TRUST_PROXY is enabled but TRUSTED_PROXIES is empty — all peers are trusted to set client IP headers")
+		slog.Warn("TRUST_PROXY is enabled but TRUSTED_PROXIES is empty — all peers are trusted to set client IP headers")
 	}
 
-	waybackClient, err := wayback.NewClient("https://web.archive.org", 30*time.Second)
+	waybackClient, err := wayback.NewClient("https://web.archive.org", 60*time.Second)
 	if err != nil {
-		log.Fatalf("failed to create wayback client: %v", err)
+		slog.Error("failed to create wayback client", "error", err)
+		os.Exit(1)
 	}
 	repository := recommendations.NewRepository(database)
 	recommendationsService := recommendations.NewService(repository, waybackClient)
@@ -74,8 +106,22 @@ func main() {
 		Recommendations: recommendationsService,
 	}
 
-	srv := server.New(app)
+	appHandler := tracing.AddTraceContext(
+		correlation.AddCorrelationId(
+			logging.AddRequestLogging(
+				server.New(app),
+			),
+		),
+	)
 
-	log.Printf("marginalia listening on :%s (rate_limit=%t trust_proxy=%t)", port, auth.EnableRateLimit, auth.TrustProxy)
-	log.Fatal(http.ListenAndServe(":"+port, srv))
+	slog.Info("marginalia listening",
+		"port", port,
+		"rate_limit", auth.EnableRateLimit,
+		"trust_proxy", auth.TrustProxy)
+
+	err = http.ListenAndServe(":"+port, appHandler)
+	if err != nil {
+		slog.Error("server stopped", "err", err, "port", port)
+		os.Exit(1)
+	}
 }
