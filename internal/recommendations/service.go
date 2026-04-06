@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"marginalia/internal/common"
+	"marginalia/internal/correlation"
 	"marginalia/internal/interop/wayback"
 	"marginalia/internal/telemetry/logging"
+	"time"
 )
 
 type Service struct {
@@ -73,12 +75,19 @@ func (s *Service) Insert(ctx context.Context, options CreateOptions) (Recommenda
 }
 
 func (s *Service) waybackSave(ctx context.Context, url string) {
-	go func(ctx context.Context, url string) {
-		logger := logging.WithComponent(ctx, componentName)
-		if err := s.wayback.RequestSave(context.Background(), url); err != nil {
-			logger.Error("wayback save failed", "error", err, "url", url)
-		}
-	}(ctx, url)
+	//todo (OV): ideally we should also create a child span here and link with parent
+	//but since we're going to remove this im just leaving it as is for reference
+	_, correlationId := correlation.EnsureCorrelationId(ctx)
+	go func(correlationId string, url string) {
+		goctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		goctx = correlation.WithCorrelationId(goctx, correlationId)
+		logger := logging.WithCorrelationId(goctx, correlationId)
+		goctx = logging.WithLogger(goctx, logger)
+
+		_ = s.wayback.RequestSave(goctx, url)
+	}(correlationId, url)
 }
 
 func (s *Service) Delete(ctx context.Context, id int64) error {

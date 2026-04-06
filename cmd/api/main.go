@@ -9,6 +9,7 @@ import (
 
 	"marginalia/internal/auth"
 	"marginalia/internal/common"
+	"marginalia/internal/correlation"
 	"marginalia/internal/feed"
 	"marginalia/internal/infra/db"
 	"marginalia/internal/interop/wayback"
@@ -87,7 +88,7 @@ func main() {
 		slog.Warn("TRUST_PROXY is enabled but TRUSTED_PROXIES is empty — all peers are trusted to set client IP headers")
 	}
 
-	waybackClient, err := wayback.NewClient("https://web.archive.org", 30*time.Second)
+	waybackClient, err := wayback.NewClient("https://web.archive.org", 60*time.Second)
 	if err != nil {
 		slog.Error("failed to create wayback client", "error", err)
 		os.Exit(1)
@@ -106,8 +107,10 @@ func main() {
 	}
 
 	appHandler := tracing.AddTraceContext(
-		logging.AddRequestLogging(
-			server.New(app),
+		correlation.AddCorrelationId(
+			logging.AddRequestLogging(
+				server.New(app),
+			),
 		),
 	)
 

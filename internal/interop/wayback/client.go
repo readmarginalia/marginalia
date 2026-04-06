@@ -34,11 +34,15 @@ func (c *WaybackClient) RequestSave(ctx context.Context, targetURL string) error
 	ctx, endSpan := beginSaveSpan(ctx, targetURL)
 	defer endSpan()
 
+	start := time.Now()
+
 	u := *c.baseURL
 	u.Path = path.Join(u.Path, "save")
 	u.Path = u.Path + "/" + targetURL
 
 	logger := logging.WithComponent(ctx, componentName)
+	logger.InfoContext(ctx, "sending save request to wayback", "url", targetURL)
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		logger.ErrorContext(ctx, "wayback: request error", "url", targetURL, "error", err)
@@ -47,8 +51,9 @@ func (c *WaybackClient) RequestSave(ctx context.Context, targetURL string) error
 	req.Header.Set("User-Agent", "Marginalia/1.0")
 
 	resp, err := c.client.Do(req)
+	elapsed := time.Since(start)
 	if err != nil {
-		logger.ErrorContext(ctx, "wayback: save failed", "url", targetURL, "error", err)
+		logger.ErrorContext(ctx, "wayback: save failed", "url", targetURL, "error", err, "elapsed", elapsed.Milliseconds())
 		return err
 	}
 	defer resp.Body.Close()
@@ -56,9 +61,11 @@ func (c *WaybackClient) RequestSave(ctx context.Context, targetURL string) error
 	_, _ = io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode >= 400 {
-		logger.ErrorContext(ctx, "wayback: save returned error", "status", resp.StatusCode, "url", targetURL)
+		logger.ErrorContext(ctx, "wayback: save returned error", "status", resp.StatusCode, "url", targetURL, "elapsed", elapsed.Milliseconds())
 		return fmt.Errorf("wayback save failed with status %d", resp.StatusCode)
 	}
+
+	logger.InfoContext(ctx, "wayback save successful", "url", targetURL, "elapsed", elapsed.Milliseconds())
 	return nil
 }
 

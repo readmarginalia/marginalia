@@ -2,7 +2,6 @@ package logging
 
 import (
 	"fmt"
-	"log/slog"
 	"net/http"
 
 	"time"
@@ -21,7 +20,7 @@ func AddRequestLogging(next http.Handler) http.Handler {
 			"client.address", r.RemoteAddr,
 		}
 
-		logger := slog.Default().With(attrs...)
+		logger := FromContext(r.Context()).With(attrs...)
 		ctx := WithLogger(r.Context(), logger)
 		r = r.WithContext(ctx)
 		logger.InfoContext(ctx, fmt.Sprintf("request starting: %s: %s ", r.Method, r.URL.Path))

@@ -25,7 +25,7 @@ func CreateLogger(ctx context.Context, res *resource.Resource) (*slog.Logger, fu
 		sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)),
 	)
 
-	otelHandler := otelslog.NewHandler("app",
+	otelHandler := otelslog.NewHandler("marginalia",
 		otelslog.WithLoggerProvider(provider),
 	)
 

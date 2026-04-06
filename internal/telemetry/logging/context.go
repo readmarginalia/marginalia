@@ -22,6 +22,11 @@ func WithComponent(ctx context.Context, component string) *slog.Logger {
 	return logger.With("component", component)
 }
 
+func WithCorrelationId(ctx context.Context, correlationId string) *slog.Logger {
+	logger := FromContext(ctx)
+	return logger.With("correlation_id", correlationId)
+}
+
 func WithLogger(ctx context.Context, logger *slog.Logger) context.Context {
 	return context.WithValue(ctx, contextLoggerKey, logger)
 }
