@@ -13,8 +13,6 @@ import (
 
 const maxPEXPeers = 100
 
-// HTTPClient is the interface for fetching data from remote Marginalia peer nodes.
-// The concrete implementation lives in internal/interop/peerclient.
 type HTTPClient interface {
 	FetchInfo(ctx context.Context, endpoint string) (*PeerInfo, error)
 	FetchKnown(ctx context.Context, endpoint string) ([]KnownPeer, error)
@@ -33,7 +31,6 @@ func NewService(repo *Repository, httpClient HTTPClient) *Service {
 }
 
 // Subscribe performs the TOFU handshake + PEX with a remote peer.
-// This is the "Add Feed" action: the user provides an endpoint string.
 func (s *Service) Subscribe(ctx context.Context, endpoint string) (*Peer, error) {
 	logger := logging.FromContext(ctx)
 	endpoint = normalizeEndpoint(endpoint)
@@ -83,7 +80,6 @@ func (s *Service) Subscribe(ctx context.Context, endpoint string) (*Peer, error)
 	return peer, nil
 }
 
-// All returns every known peer.
 func (s *Service) All(ctx context.Context) ([]Peer, error) {
 	peers, err := s.repo.All(ctx)
 	if err != nil {
@@ -93,7 +89,6 @@ func (s *Service) All(ctx context.Context) ([]Peer, error) {
 	return peers, nil
 }
 
-// Trusted returns only trusted peers (for PEX responses).
 func (s *Service) Trusted(ctx context.Context) ([]Peer, error) {
 	peers, err := s.repo.Trusted(ctx)
 	if err != nil {
@@ -103,7 +98,6 @@ func (s *Service) Trusted(ctx context.Context) ([]Peer, error) {
 	return peers, nil
 }
 
-// Delete removes a peer by ID.
 func (s *Service) Delete(ctx context.Context, id int64) error {
 	found, err := s.repo.Delete(ctx, id)
 	if err != nil {
@@ -159,7 +153,7 @@ func (s *Service) exchangePeers(ctx context.Context, endpoint string) {
 	}
 }
 
-// normalizeEndpoint ensures the endpoint has a scheme and port, defaulting to 9595.
+// ensures the endpoint has a scheme and port, defaulting to 9595.
 func normalizeEndpoint(endpoint string) string {
 	endpoint = strings.TrimSpace(endpoint)
 	endpoint = strings.TrimRight(endpoint, "/")
@@ -175,8 +169,6 @@ func normalizeEndpoint(endpoint string) string {
 	}
 
 	if _, _, err := net.SplitHostPort(hostport); err != nil {
-		// Bare IPv6 address (e.g. "2001:db8::1") has no brackets and no port;
-		// wrap it so SplitHostPort can parse it after we append the default port.
 		if strings.Contains(hostport, ":") && !strings.HasPrefix(hostport, "[") {
 			hostport = "[" + hostport + "]"
 		}
@@ -185,7 +177,7 @@ func normalizeEndpoint(endpoint string) string {
 	return scheme + "://" + hostport
 }
 
-// validateEndpoint rejects loopback, private, and link-local addresses.
+// rejects loopback, private, and link-local addresses.
 func validateEndpoint(ctx context.Context, endpoint string) error {
 	hostport := endpoint
 	if _, after, ok := strings.Cut(endpoint, "://"); ok {
