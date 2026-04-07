@@ -43,5 +43,36 @@ func Open(dbPath string) (*sql.DB, error) {
 	// migrate: add content column if missing
 	db.Exec(`ALTER TABLE recommendations ADD COLUMN content TEXT`)
 
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS identity (
+		id          INTEGER PRIMARY KEY CHECK (id = 1),
+		public_key  TEXT NOT NULL,
+		private_key TEXT NOT NULL,
+		created_at  INTEGER NOT NULL DEFAULT (unixepoch())
+	)`)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create identity table: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS peers (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		endpoint    TEXT NOT NULL UNIQUE,
+		public_key  TEXT NOT NULL,
+		owner       TEXT,
+		status      TEXT NOT NULL DEFAULT 'discovered' CHECK (status IN ('trusted', 'discovered')),
+		pinned_at   INTEGER,
+		last_seen   INTEGER,
+		added_at    INTEGER NOT NULL DEFAULT (unixepoch())
+	)`)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create peers table: %w", err)
+	}
+
+	if _, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_peers_status ON peers(status)`); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("create peers index: %w", err)
+	}
+
 	return db, nil
 }
