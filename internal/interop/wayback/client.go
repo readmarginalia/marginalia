@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"marginalia/internal/telemetry/logging"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"path"
@@ -14,11 +14,12 @@ import (
 type WaybackClient struct {
 	baseURL *url.URL
 	client  *http.Client
+	logger  *slog.Logger
 }
 
 const componentName = "wayback.client"
 
-func NewClient(baseURL string, timeout time.Duration) (*WaybackClient, error) {
+func NewClient(baseURL string, timeout time.Duration, logger *slog.Logger) (*WaybackClient, error) {
 	u, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid base URL: %w", err)
@@ -27,6 +28,7 @@ func NewClient(baseURL string, timeout time.Duration) (*WaybackClient, error) {
 	return &WaybackClient{
 		baseURL: u,
 		client:  &http.Client{Timeout: timeout},
+		logger:  logger.With("component_name", componentName),
 	}, nil
 }
 
@@ -40,7 +42,7 @@ func (c *WaybackClient) RequestSave(ctx context.Context, targetURL string) error
 	u.Path = path.Join(u.Path, "save")
 	u.Path = u.Path + "/" + targetURL
 
-	logger := logging.WithComponent(ctx, componentName)
+	logger := c.logger
 	logger.InfoContext(ctx, "sending save request to wayback", "url", targetURL)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)

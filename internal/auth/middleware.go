@@ -3,8 +3,8 @@ package auth
 import (
 	"crypto/sha256"
 	"crypto/subtle"
+	"log/slog"
 	"marginalia/internal/infra/http"
-	"marginalia/internal/telemetry/logging"
 	stdhttp "net/http"
 	"strings"
 	"time"
@@ -63,7 +63,7 @@ func constantTimeMatch(provided string, expectedHash [32]byte) bool {
 }
 
 func logAuthDenied(r *stdhttp.Request, clientID string, proxied bool, reason string, blockedUntil time.Time) {
-	logger := logging.FromContext(r.Context())
+	logger := slog.Default()
 	attrs := []any{
 		"method", r.Method,
 		"path", r.URL.Path,

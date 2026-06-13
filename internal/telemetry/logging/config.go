@@ -34,7 +34,9 @@ func CreateLogger(ctx context.Context, res *resource.Resource) (*slog.Logger, fu
 	})
 
 	logger := slog.New(
-		CreateMultiHandler(otelHandler, stdoutHandler),
+		CreateContextHandler(
+			CreateMultiHandler(otelHandler, stdoutHandler),
+		),
 	)
 
 	return logger, provider.Shutdown, nil

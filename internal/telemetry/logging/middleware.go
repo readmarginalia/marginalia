@@ -2,6 +2,7 @@ package logging
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"time"
@@ -14,15 +15,9 @@ func AddRequestLogging(next http.Handler) http.Handler {
 		start := time.Now()
 
 		ww := chimw.NewWrapResponseWriter(w, r.ProtoMajor)
-		attrs := []any{
-			"http.request.method", r.Method,
-			"url.path", r.URL.Path,
-			"client.address", r.RemoteAddr,
-		}
 
-		logger := FromContext(r.Context()).With(attrs...)
-		ctx := WithLogger(r.Context(), logger)
-		r = r.WithContext(ctx)
+		logger := slog.Default()
+		ctx := r.Context()
 		logger.InfoContext(ctx, fmt.Sprintf("request starting: %s: %s ", r.Method, r.URL.Path))
 
 		next.ServeHTTP(ww, r)

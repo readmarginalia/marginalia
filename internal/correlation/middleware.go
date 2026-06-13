@@ -1,7 +1,6 @@
 package correlation
 
 import (
-	"marginalia/internal/telemetry/logging"
 	"net/http"
 )
 
@@ -15,8 +14,6 @@ func AddCorrelationId(next http.Handler) http.Handler {
 		}
 
 		ctx := WithCorrelationId(r.Context(), correlationId)
-		logger := logging.WithCorrelationId(ctx, correlationId)
-		ctx = logging.WithLogger(ctx, logger)
 		r = r.WithContext(ctx)
 
 		w.Header().Set(headerName, correlationId)

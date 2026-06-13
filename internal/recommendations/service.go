@@ -3,20 +3,25 @@ package recommendations
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"marginalia/internal/common"
 	"marginalia/internal/correlation"
 	"marginalia/internal/interop/wayback"
-	"marginalia/internal/telemetry/logging"
 	"time"
 )
 
 type Service struct {
 	repo    *Repository
 	wayback *wayback.WaybackClient
+	logger  *slog.Logger
 }
 
-func NewService(repo *Repository, wayback *wayback.WaybackClient) *Service {
-	return &Service{repo: repo, wayback: wayback}
+func NewService(repo *Repository, wayback *wayback.WaybackClient, logger *slog.Logger) *Service {
+	return &Service{
+		repo:    repo,
+		wayback: wayback,
+		logger:  logger.With("component_name", componentName),
+	}
 }
 
 type CreateOptions struct {
@@ -29,10 +34,8 @@ func (s *Service) Insert(ctx context.Context, options CreateOptions) (Recommenda
 	ctx, span := tracer.Start(ctx, "service.Insert")
 	defer span.End()
 
-	logger := logging.WithComponent(ctx, componentName)
-
 	if options.URL == "" {
-		logger.ErrorContext(ctx,
+		s.logger.ErrorContext(ctx,
 			"invalid url",
 			"url", options.URL)
 		return Recommendation{}, common.ServiceError{Reason: "invalid url", Code: 400}
@@ -40,7 +43,7 @@ func (s *Service) Insert(ctx context.Context, options CreateOptions) (Recommenda
 
 	article, err := extractFromURL(ctx, options.URL)
 	if err != nil {
-		logger.ErrorContext(ctx,
+		s.logger.ErrorContext(ctx,
 			"failed to extract article",
 			"error", err,
 			"url", options.URL)
@@ -52,7 +55,7 @@ func (s *Service) Insert(ctx context.Context, options CreateOptions) (Recommenda
 
 	rec, inserted, err := s.repo.Insert(ctx, options.URL, article.Title, article.Byline, article.Excerpt, article.Content, article.SiteName)
 	if err != nil {
-		logger.ErrorContext(ctx,
+		s.logger.ErrorContext(ctx,
 			"failed to insert recommendation",
 			"error", err,
 			"url", options.URL)
@@ -60,13 +63,13 @@ func (s *Service) Insert(ctx context.Context, options CreateOptions) (Recommenda
 		return Recommendation{}, common.ServiceError{Reason: "failed to insert recommendation", Code: 500}
 	}
 	if !inserted {
-		logger.ErrorContext(ctx,
+		s.logger.ErrorContext(ctx,
 			"url already exists",
 			"url", options.URL)
 		return Recommendation{}, common.ServiceError{Reason: "url already exists", Code: 409}
 	}
 
-	logger.InfoContext(ctx,
+	s.logger.InfoContext(ctx,
 		fmt.Sprintf("added recomemendation [ %s ]", rec.Title),
 		"url", options.URL,
 		"title", rec.Title)
@@ -83,9 +86,6 @@ func (s *Service) waybackSave(ctx context.Context, url string) {
 		defer cancel()
 
 		goctx = correlation.WithCorrelationId(goctx, correlationId)
-		logger := logging.WithCorrelationId(goctx, correlationId)
-		goctx = logging.WithLogger(goctx, logger)
-
 		_ = s.wayback.RequestSave(goctx, url)
 	}(correlationId, url)
 }
@@ -94,23 +94,21 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	ctx, span := tracer.Start(ctx, "service.Delete")
 	defer span.End()
 
-	logger := logging.WithComponent(ctx, componentName)
-
 	found, err := s.repo.Delete(ctx, id)
 	if err != nil {
-		logger.ErrorContext(ctx,
+		s.logger.ErrorContext(ctx,
 			"failed to delete recommendation",
 			"error", err,
 			"recommendation_id", id)
 		return common.ServiceError{Reason: "failed to delete recommendation", Code: 500}
 	}
 	if !found {
-		logger.InfoContext(ctx,
+		s.logger.InfoContext(ctx,
 			"recommendation not found",
 			"recommendation_id", id)
 		return common.ServiceError{Reason: "not found", Code: 404}
 	}
-	logger.InfoContext(ctx,
+	s.logger.InfoContext(ctx,
 		"deleted recommendation",
 		"recommendation_id", id)
 	return nil
@@ -120,10 +118,9 @@ func (s *Service) All(ctx context.Context) ([]Recommendation, error) {
 	ctx, span := tracer.Start(ctx, "service.All")
 	defer span.End()
 
-	logger := logging.WithComponent(ctx, componentName)
 	recs, err := s.repo.All(ctx)
 	if err != nil {
-		logger.ErrorContext(ctx,
+		s.logger.ErrorContext(ctx,
 			"failed to fetch recommendations",
 			"error", err)
 

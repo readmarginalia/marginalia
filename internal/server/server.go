@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"marginalia/internal/auth"
 	"marginalia/internal/feed"
 	"marginalia/internal/infra/http"
@@ -12,7 +13,6 @@ import (
 	"marginalia/internal/recommendations"
 	"marginalia/internal/server/requests"
 	"marginalia/internal/server/responses"
-	"marginalia/internal/telemetry/logging"
 	stdhttp "net/http"
 	"strconv"
 	"time"
@@ -128,7 +128,7 @@ func handleRSS(app *App) stdhttp.HandlerFunc {
 		w.Header().Set("Last-Modified", result.LastModified.Format(stdhttp.TimeFormat))
 		w.Header().Set("Cache-Control", "no-store, must-revalidate")
 
-		logger := logging.FromContext(r.Context())
+		logger := slog.Default()
 		logger.InfoContext(r.Context(), "rss request",
 			"If-None-Match", r.Header.Get("If-None-Match"),
 			"If-Modified-Since", r.Header.Get("If-Modified-Since"))

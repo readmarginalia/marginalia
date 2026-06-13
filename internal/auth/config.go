@@ -1,8 +1,8 @@
 package auth
 
 import (
+	"log/slog"
 	"marginalia/internal/infra/http"
-	"marginalia/internal/telemetry/logging"
 	stdhttp "net/http"
 	"net/netip"
 	"strings"
@@ -31,7 +31,7 @@ func (cfg AuthConfig) clientIdentity(r *stdhttp.Request) (string, bool) {
 				return clientIP.String(), true
 			}
 		}
-		logger := logging.FromContext(r.Context())
+		logger := slog.Default()
 		logger.WarnContext(r.Context(),
 			"request from trusted proxy without valid client IP in headers, falling back to peer address",
 			"remote_addr", r.RemoteAddr,
