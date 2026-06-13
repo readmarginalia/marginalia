@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"log"
+	"log/slog"
 	"marginalia/internal/infra/http"
 	stdhttp "net/http"
 	"net/netip"
@@ -31,7 +31,13 @@ func (cfg AuthConfig) clientIdentity(r *stdhttp.Request) (string, bool) {
 				return clientIP.String(), true
 			}
 		}
-		log.Printf("proxy warning: peer %s is trusted but no valid client IP found in headers %v, falling back to peer address", r.RemoteAddr, cfg.RealIPHeaders)
+		logger := slog.Default()
+		logger.WarnContext(r.Context(),
+			"request from trusted proxy without valid client IP in headers, falling back to peer address",
+			"remote_addr", r.RemoteAddr,
+			"headers_checked", cfg.RealIPHeaders,
+		)
+
 	}
 	if peer.IsValid() {
 		return peer.String(), false

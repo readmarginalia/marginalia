@@ -6,7 +6,74 @@ services:
     volumes:
       - data:/data
     env_file: .env
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4318
+    restart: unless-stopped
+  
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.148.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./telemetry/otelcol.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4318:4318"
+    depends_on:
+      - loki
+      - tempo
+      
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.4.6
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./telemetry/loki.yaml:/etc/loki/config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.9.0
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./telemetry/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/tmp/tempo
+    ports:
+      - "3200:3200"
+      - "4319:4318"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    volumes:
+      - ./telemetry/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.4.2
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./telemetry/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - loki
+      - tempo
+      - prometheus
     restart: unless-stopped
 
 volumes:
   data:
+  loki-data:
+  tempo-data:
+  prometheus-data:
+  grafana-data:

@@ -1,9 +1,10 @@
 package feed
 
 import (
+	"context"
 	"crypto/sha256"
 	"html"
-	"log"
+	"log/slog"
 	"marginalia/internal/common"
 	"marginalia/internal/interop/wayback"
 	"marginalia/internal/recommendations"
@@ -15,15 +16,22 @@ import (
 
 type Service struct {
 	recommendations *recommendations.Service
+	logger          *slog.Logger
 }
 
-func NewService(recommendations *recommendations.Service) *Service {
-	return &Service{recommendations: recommendations}
+func NewService(recommendations *recommendations.Service, logger *slog.Logger) *Service {
+	return &Service{recommendations: recommendations, logger: logger.With("component_name", componentName)}
 }
 
-func (s *Service) RenderRss(owner string) (*RssOutput, error) {
-	recs, err := s.recommendations.All()
+const componentName = "feed.service"
+
+func (s *Service) RenderRss(ctx context.Context, owner string) (*RssOutput, error) {
+
+	recs, err := s.recommendations.All(ctx)
 	if err != nil {
+		s.logger.ErrorContext(ctx,
+			"failed to fetch recommendations",
+			"error", err)
 		return nil, common.ServiceError{Reason: "failed to fetch recommendations", Code: 500}
 	}
 
@@ -65,7 +73,9 @@ func (s *Service) RenderRss(owner string) (*RssOutput, error) {
 
 	out, err := xml.MarshalIndent(rss, "", "  ")
 	if err != nil {
-		log.Printf("Error generating RSS feed: %v", err)
+		s.logger.ErrorContext(ctx,
+			"error generating RSS feed",
+			"error", err)
 		return nil, common.ServiceError{Reason: "rss generation error", Code: 500}
 	}
 

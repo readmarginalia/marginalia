@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/XSAM/otelsql"
 	_ "modernc.org/sqlite"
 )
 
@@ -14,7 +15,12 @@ func Open(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("create data dir: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", dbPath)
+	driverName, err := otelsql.Register("sqlite")
+	if err != nil {
+		return nil, fmt.Errorf("register otelsql driver: %w", err)
+	}
+
+	db, err := sql.Open(driverName, dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}

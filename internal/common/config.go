@@ -1,7 +1,7 @@
 package common
 
 import (
-	"log"
+	"log/slog"
 	"net/netip"
 	"os"
 	"strconv"
@@ -15,7 +15,12 @@ func EnvBool(name string) bool {
 	}
 	enabled, err := strconv.ParseBool(value)
 	if err != nil {
-		log.Fatalf("invalid %s: %v", name, err)
+		slog.Error("invalid boolean value",
+			"name", name,
+			"value", value,
+			"error", err)
+
+		os.Exit(1)
 	}
 	return enabled
 }
@@ -46,7 +51,10 @@ func MustParseTrustedProxyRanges(values []string) []netip.Prefix {
 		}
 		prefix, err := netip.ParsePrefix(value)
 		if err != nil {
-			log.Fatalf("invalid TRUSTED_PROXIES entry %q: %v", value, err)
+			slog.Error("invalid TRUSTED_PROXIES entry",
+				"value", value,
+				"error", err)
+			os.Exit(1)
 		}
 		prefix = prefix.Masked()
 		if prefix.Addr().Is4In6() {
