@@ -1,6 +1,7 @@
 package telemetry
 
 import (
+	"context"
 	"os"
 
 	"marginalia/internal/buildinfo"
@@ -9,16 +10,17 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
 )
 
-func BuildResource() (*resource.Resource, error) {
-	env := os.Getenv("APP_ENV")
+func BuildResource(ctx context.Context) (*resource.Resource, error) {
+	env := os.Getenv("ENVIRONMENT")
 	if env == "" {
 		env = "development"
 	}
 
-	return resource.Merge(
-		resource.Default(),
-		resource.NewWithAttributes(
-			semconv.SchemaURL,
+	return resource.New(
+		ctx,
+		resource.WithFromEnv(),
+		resource.WithTelemetrySDK(),
+		resource.WithAttributes(
 			semconv.ServiceName("marginalia"),
 			semconv.ServiceVersion(buildinfo.Version),
 			semconv.DeploymentEnvironmentName(env),

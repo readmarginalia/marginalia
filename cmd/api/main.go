@@ -18,12 +18,13 @@ import (
 	"marginalia/internal/server"
 	"marginalia/internal/telemetry"
 	"marginalia/internal/telemetry/logging"
+	"marginalia/internal/telemetry/metrics"
 	"marginalia/internal/telemetry/tracing"
 )
 
 func main() {
 	ctx := context.Background()
-	res, err := telemetry.BuildResource()
+	res, err := telemetry.BuildResource(ctx)
 	if err != nil {
 		slog.Error("failed to build resource", "error", err)
 		os.Exit(1)
@@ -44,6 +45,13 @@ func main() {
 		os.Exit(1)
 	}
 	defer shutdownTracing(ctx)
+
+	shutdownMetrics, err := metrics.SetupMetrics(ctx, res)
+	if err != nil {
+		slog.Error("failed to setup metrics", "error", err)
+		os.Exit(1)
+	}
+	defer shutdownMetrics(ctx)
 
 	token := os.Getenv("TOKEN")
 	if token == "" {

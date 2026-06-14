@@ -12,8 +12,15 @@ import (
 )
 
 func SetupTracing(ctx context.Context, res *resource.Resource) (func(context.Context) error, error) {
+	otelEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	shutdown := func(context.Context) error { return nil }
+
+	if otelEndpoint == "" {
+		return shutdown, nil
+	}
+
 	exporter, err := otlptracehttp.New(ctx,
-		otlptracehttp.WithEndpoint(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")),
+		otlptracehttp.WithEndpoint(otelEndpoint),
 		otlptracehttp.WithInsecure(),
 	)
 	if err != nil {

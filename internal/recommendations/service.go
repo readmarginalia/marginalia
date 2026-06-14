@@ -74,6 +74,8 @@ func (s *Service) Insert(ctx context.Context, options CreateOptions) (Recommenda
 		"url", options.URL,
 		"title", rec.Title)
 
+	recordRecommendationAdded(ctx)
+
 	return rec, nil
 }
 
