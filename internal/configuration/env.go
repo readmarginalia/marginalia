@@ -2,7 +2,6 @@ package configuration
 
 import (
 	"fmt"
-	"log/slog"
 	"net/netip"
 	"os"
 	"strconv"
@@ -48,14 +47,23 @@ func Load() (AppConfig, error) {
 		environment = "development"
 	}
 
-	authRateLimit := EnvBool("AUTH_RATE_LIMIT")
-	trustProxy := EnvBool("TRUST_PROXY")
+	authRateLimit, err := EnvBool("AUTH_RATE_LIMIT")
+	if err != nil {
+		return AppConfig{}, err
+	}
+	trustProxy, err := EnvBool("TRUST_PROXY")
+	if err != nil {
+		return AppConfig{}, err
+	}
 	realIPHeaders := EnvList("REAL_IP_HEADERS")
 	if len(realIPHeaders) == 0 {
 		realIPHeaders = DefaultRealIPHeaders
 	}
 
-	trustedProxyRanges := MustParseTrustedProxyRanges(EnvList("TRUSTED_PROXIES"))
+	trustedProxyRanges, err := ParseTrustedProxyRanges(EnvList("TRUSTED_PROXIES"))
+	if err != nil {
+		return AppConfig{}, err
+	}
 
 	return AppConfig{
 		Environment:        environment,
@@ -72,21 +80,16 @@ func Load() (AppConfig, error) {
 	}, nil
 }
 
-func EnvBool(name string) bool {
+func EnvBool(name string) (bool, error) {
 	value := strings.TrimSpace(os.Getenv(name))
 	if value == "" {
-		return false
+		return false, nil
 	}
 	enabled, err := strconv.ParseBool(value)
 	if err != nil {
-		slog.Error("invalid boolean value",
-			"name", name,
-			"value", value,
-			"error", err)
-
-		os.Exit(1)
+		return false, fmt.Errorf("invalid boolean value for %s: %s", name, value)
 	}
-	return enabled
+	return enabled, nil
 }
 
 func EnvList(name string) []string {
@@ -105,7 +108,7 @@ func EnvList(name string) []string {
 	return items
 }
 
-func MustParseTrustedProxyRanges(values []string) []netip.Prefix {
+func ParseTrustedProxyRanges(values []string) ([]netip.Prefix, error) {
 	prefixes := make([]netip.Prefix, 0, len(values))
 	for _, value := range values {
 		if addr, err := netip.ParseAddr(value); err == nil {
@@ -115,10 +118,7 @@ func MustParseTrustedProxyRanges(values []string) []netip.Prefix {
 		}
 		prefix, err := netip.ParsePrefix(value)
 		if err != nil {
-			slog.Error("invalid TRUSTED_PROXIES entry",
-				"value", value,
-				"error", err)
-			os.Exit(1)
+			return nil, fmt.Errorf("invalid trusted proxy range: %s", value)
 		}
 		prefix = prefix.Masked()
 		if prefix.Addr().Is4In6() {
@@ -126,5 +126,5 @@ func MustParseTrustedProxyRanges(values []string) []netip.Prefix {
 		}
 		prefixes = append(prefixes, prefix)
 	}
-	return prefixes
+	return prefixes, nil
 }
