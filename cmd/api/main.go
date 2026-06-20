@@ -30,7 +30,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	res, err := telemetry.BuildResource(ctx, appConfig.Environment)
+	res, err := telemetry.BuildResource(ctx, appConfig)
 	if err != nil {
 		slog.Error("failed to build resource", "error", err)
 		os.Exit(1)
@@ -94,7 +94,7 @@ func main() {
 		Recommendations: recommendationsService,
 	}
 
-	midlewares := []func(http.Handler) http.Handler{
+	middlewares := []func(http.Handler) http.Handler{
 		tracing.AddTraceContext,
 		correlation.AddCorrelationId,
 		requestmeta.AddRequestMetadata(appConfig),
@@ -102,7 +102,7 @@ func main() {
 		mg_http.AddCors,
 	}
 
-	appHandler := server.New(app, midlewares...)
+	appHandler := server.New(app, middlewares...)
 
 	slog.Info("marginalia listening",
 		"port", appConfig.Port,
