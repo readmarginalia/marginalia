@@ -18,57 +18,50 @@ import (
 	"marginalia/internal/server"
 	"marginalia/internal/telemetry"
 	"marginalia/internal/telemetry/logging"
-	"marginalia/internal/telemetry/metrics"
 	"marginalia/internal/telemetry/tracing"
 )
 
 func main() {
+	if err := run(); err != nil {
+		slog.Error("application failed", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	appConfig, err := configuration.Load()
 	if err != nil {
 		slog.Error("failed to load configuration", "error", err)
-		os.Exit(1)
+		return err
 	}
 
 	ctx := context.Background()
-	res, err := telemetry.BuildResource(ctx, appConfig)
+	logger, shutdownTelemetry, err := telemetry.Init(ctx, appConfig)
 	if err != nil {
-		slog.Error("failed to build resource", "error", err)
-		os.Exit(1)
+		slog.Error("failed to initialize telemetry", "error", err)
+		return err
 	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 
-	logger, shutdownLogs, err := logging.CreateLogger(ctx, res, appConfig)
-	if err != nil {
-		slog.Error("failed to create logger", "error", err)
-		os.Exit(1)
-	}
-	defer shutdownLogs(ctx)
+		if err := shutdownTelemetry(shutdownCtx); err != nil {
+			slog.Error("failed to shutdown telemetry", "error", err)
+		}
+	}()
 
 	slog.SetDefault(logger)
-
-	shutdownTracing, err := tracing.SetupTracing(ctx, res, appConfig)
-	if err != nil {
-		slog.Error("failed to setup tracing", "error", err)
-		os.Exit(1)
-	}
-	defer shutdownTracing(ctx)
-
-	shutdownMetrics, err := metrics.SetupMetrics(ctx, res, appConfig)
-	if err != nil {
-		slog.Error("failed to setup metrics", "error", err)
-		os.Exit(1)
-	}
-	defer shutdownMetrics(ctx)
 
 	theme, err := server.LoadTheme(appConfig.ThemeName)
 	if err != nil {
 		slog.Error("failed to load theme", "error", err)
-		os.Exit(1)
+		return err
 	}
 
 	database, err := db.Open(appConfig.DbPath)
 	if err != nil {
 		slog.Error("failed to open database", "error", err)
-		os.Exit(1)
+		return err
 	}
 	defer database.Close()
 
@@ -79,7 +72,7 @@ func main() {
 	waybackClient, err := wayback.NewClient("https://web.archive.org", 60*time.Second, logger)
 	if err != nil {
 		slog.Error("failed to create wayback client", "error", err)
-		os.Exit(1)
+		return err
 	}
 	repository := recommendations.NewRepository(database)
 	recommendationsService := recommendations.NewService(repository, waybackClient, logger)
@@ -112,6 +105,8 @@ func main() {
 	err = http.ListenAndServe(":"+appConfig.Port, appHandler)
 	if err != nil {
 		slog.Error("server stopped", "err", err, "port", appConfig.Port)
-		os.Exit(1)
+		return err
 	}
+
+	return nil
 }
