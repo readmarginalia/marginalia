@@ -2,7 +2,7 @@ package metrics
 
 import (
 	"context"
-	"os"
+	"marginalia/internal/configuration"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -11,16 +11,16 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 )
 
-func SetupMetrics(ctx context.Context, res *resource.Resource) (func(context.Context) error, error) {
-	otelEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+func SetupMetrics(ctx context.Context, res *resource.Resource, config configuration.AppConfig) (func(context.Context) error, error) {
+
 	shutdown := func(context.Context) error { return nil }
 
-	if otelEndpoint == "" {
+	if config.OtelEndpoint == "" {
 		return shutdown, nil
 	}
 
 	exporter, err := otlpmetrichttp.New(ctx,
-		otlpmetrichttp.WithEndpoint(otelEndpoint),
+		otlpmetrichttp.WithEndpoint(config.OtelEndpoint),
 		otlpmetrichttp.WithInsecure(),
 	)
 	if err != nil {

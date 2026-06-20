@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"log/slog"
+	"marginalia/internal/configuration"
 	"marginalia/internal/infra/http"
 	stdhttp "net/http"
 	"strings"
@@ -12,11 +13,11 @@ import (
 
 // TokenAuth returns middleware that validates Bearer token authentication
 // and optionally rate-limits failed attempts.
-func TokenAuth(cfg AuthConfig, limiter *http.FailedAuthLimiter) func(stdhttp.Handler) stdhttp.Handler {
+func TokenAuth(cfg configuration.AppConfig, limiter *http.FailedAuthLimiter) func(stdhttp.Handler) stdhttp.Handler {
 	expectedHash := sha256.Sum256([]byte(cfg.Token))
 	return func(next stdhttp.Handler) stdhttp.Handler {
 		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-			clientID, proxied := cfg.clientIdentity(r)
+			clientID, proxied := http.ClientIdentity(r, cfg)
 
 			if limiter != nil {
 				if blockedUntil, blocked := limiter.Blocked(clientID, time.Now()); blocked {
@@ -63,7 +64,6 @@ func constantTimeMatch(provided string, expectedHash [32]byte) bool {
 }
 
 func logAuthDenied(r *stdhttp.Request, clientID string, proxied bool, reason string, blockedUntil time.Time) {
-	logger := slog.Default()
 	attrs := []any{
 		"method", r.Method,
 		"path", r.URL.Path,
@@ -78,5 +78,5 @@ func logAuthDenied(r *stdhttp.Request, clientID string, proxied bool, reason str
 		)
 	}
 
-	logger.ErrorContext(r.Context(), "auth denied", attrs...)
+	slog.ErrorContext(r.Context(), "auth denied", attrs...)
 }

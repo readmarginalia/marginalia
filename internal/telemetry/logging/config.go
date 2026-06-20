@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	"log/slog"
+	"marginalia/internal/configuration"
 	"os"
 
 	"go.opentelemetry.io/contrib/bridges/otelslog"
@@ -11,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 )
 
-func CreateLogger(ctx context.Context, res *resource.Resource) (*slog.Logger, func(context.Context) error, error) {
+func CreateLogger(ctx context.Context, res *resource.Resource, config configuration.AppConfig) (*slog.Logger, func(context.Context) error, error) {
 
 	stdoutHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
@@ -20,11 +21,9 @@ func CreateLogger(ctx context.Context, res *resource.Resource) (*slog.Logger, fu
 	handlers := []slog.Handler{stdoutHandler}
 	shutdown := func(context.Context) error { return nil }
 
-	otelEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-
-	if otelEndpoint != "" {
+	if config.OtelEndpoint != "" {
 		exporter, err := otlploghttp.New(ctx,
-			otlploghttp.WithEndpoint(otelEndpoint),
+			otlploghttp.WithEndpoint(config.OtelEndpoint),
 			otlploghttp.WithInsecure(),
 		)
 		if err != nil {

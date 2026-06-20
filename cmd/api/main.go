@@ -7,11 +7,11 @@ import (
 	"os"
 	"time"
 
-	"marginalia/internal/auth"
-	"marginalia/internal/common"
+	"marginalia/internal/configuration"
 	"marginalia/internal/correlation"
 	"marginalia/internal/feed"
 	"marginalia/internal/infra/db"
+	mg_http "marginalia/internal/infra/http"
 	"marginalia/internal/interop/wayback"
 	"marginalia/internal/recommendations"
 	"marginalia/internal/requestmeta"
@@ -23,14 +23,20 @@ import (
 )
 
 func main() {
+	appConfig, err := configuration.Load()
+	if err != nil {
+		slog.Error("failed to load configuration", "error", err)
+		os.Exit(1)
+	}
+
 	ctx := context.Background()
-	res, err := telemetry.BuildResource(ctx)
+	res, err := telemetry.BuildResource(ctx, appConfig.Environment)
 	if err != nil {
 		slog.Error("failed to build resource", "error", err)
 		os.Exit(1)
 	}
 
-	logger, shutdownLogs, err := logging.CreateLogger(ctx, res)
+	logger, shutdownLogs, err := logging.CreateLogger(ctx, res, appConfig)
 	if err != nil {
 		slog.Error("failed to create logger", "error", err)
 		os.Exit(1)
@@ -39,61 +45,34 @@ func main() {
 
 	slog.SetDefault(logger)
 
-	shutdownTracing, err := tracing.SetupTracing(ctx, res)
+	shutdownTracing, err := tracing.SetupTracing(ctx, res, appConfig)
 	if err != nil {
 		slog.Error("failed to setup tracing", "error", err)
 		os.Exit(1)
 	}
 	defer shutdownTracing(ctx)
 
-	shutdownMetrics, err := metrics.SetupMetrics(ctx, res)
+	shutdownMetrics, err := metrics.SetupMetrics(ctx, res, appConfig)
 	if err != nil {
 		slog.Error("failed to setup metrics", "error", err)
 		os.Exit(1)
 	}
 	defer shutdownMetrics(ctx)
 
-	token := os.Getenv("TOKEN")
-	if token == "" {
-		slog.Error("TOKEN is required")
-		os.Exit(1)
-	}
-
-	owner := os.Getenv("OWNER")
-	themeName := os.Getenv("THEME")
-
-	theme, err := server.LoadTheme(themeName)
+	theme, err := server.LoadTheme(appConfig.ThemeName)
 	if err != nil {
 		slog.Error("failed to load theme", "error", err)
 		os.Exit(1)
 	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "9595"
-	}
-
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "data/marginalia.db"
-	}
-
-	database, err := db.Open(dbPath)
+	database, err := db.Open(appConfig.DbPath)
 	if err != nil {
 		slog.Error("failed to open database", "error", err)
 		os.Exit(1)
 	}
 	defer database.Close()
 
-	auth := auth.AuthConfig{
-		Token:              token,
-		EnableRateLimit:    common.EnvBool("AUTH_RATE_LIMIT"),
-		TrustProxy:         common.EnvBool("TRUST_PROXY"),
-		RealIPHeaders:      common.EnvList("REAL_IP_HEADERS"),
-		TrustedProxyRanges: common.MustParseTrustedProxyRanges(common.EnvList("TRUSTED_PROXIES")),
-	}
-
-	if auth.TrustProxy && len(auth.TrustedProxyRanges) == 0 {
+	if appConfig.TrustProxy && len(appConfig.TrustedProxyRanges) == 0 {
 		slog.Warn("TRUST_PROXY is enabled but TRUSTED_PROXIES is empty — all peers are trusted to set client IP headers")
 	}
 
@@ -107,32 +86,32 @@ func main() {
 	feedService := feed.NewService(recommendationsService, logger)
 
 	app := &server.App{
-		AuthConfig:      &auth,
+		AppConfig:       appConfig,
 		Database:        database,
-		Owner:           owner,
+		Owner:           appConfig.Owner,
 		Theme:           theme,
 		Feed:            feedService,
 		Recommendations: recommendationsService,
 	}
 
-	appHandler := tracing.AddTraceContext(
-		correlation.AddCorrelationId(
-			requestmeta.AddRequestMetadata(
-				logging.AddRequestLogging(
-					server.New(app),
-				),
-			),
-		),
-	)
+	midlewares := []func(http.Handler) http.Handler{
+		tracing.AddTraceContext,
+		correlation.AddCorrelationId,
+		requestmeta.AddRequestMetadata(appConfig),
+		logging.AddRequestLogging,
+		mg_http.AddCors,
+	}
+
+	appHandler := server.New(app, midlewares...)
 
 	slog.Info("marginalia listening",
-		"port", port,
-		"rate_limit", auth.EnableRateLimit,
-		"trust_proxy", auth.TrustProxy)
+		"port", appConfig.Port,
+		"rate_limit", appConfig.AuthRateLimit,
+		"trust_proxy", appConfig.TrustProxy)
 
-	err = http.ListenAndServe(":"+port, appHandler)
+	err = http.ListenAndServe(":"+appConfig.Port, appHandler)
 	if err != nil {
-		slog.Error("server stopped", "err", err, "port", port)
+		slog.Error("server stopped", "err", err, "port", appConfig.Port)
 		os.Exit(1)
 	}
 }
