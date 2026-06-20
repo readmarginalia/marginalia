@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: marginalia-config
+  namespace: marginalia
+data:
+  DB_PATH: /data/marginalia.db
+  PORT: "9595"
+  OWNER: "Owner"
+  THEME: "terminal"
+  AUTH_RATE_LIMIT: "true"

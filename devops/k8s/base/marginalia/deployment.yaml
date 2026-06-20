@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: marginalia
+  namespace: marginalia
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: marginalia
+  template:
+    metadata:
+      labels:
+        app: marginalia
+    spec:
+      containers:
+        - name: marginalia
+          image: marginalia:dev
+          ports:
+            - containerPort: 9595
+          envFrom:
+            - configMapRef:
+                name: marginalia-config
+          env:            
+            - name: TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: marginalia-token
+                  key: token
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            tcpSocket:
+              port: 9595
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 9595
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: marginalia-data

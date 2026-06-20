@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: marginalia
+  namespace: marginalia
+spec:
+  selector:
+    app: marginalia
+  ports:
+    - name: http
+      port: 9595
+      targetPort: 9595
+  type: ClusterIP
