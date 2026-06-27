@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"marginalia/internal/common"
-	"marginalia/internal/correlation"
 	"marginalia/internal/interop/wayback"
+	"marginalia/internal/worker"
 	"time"
 )
 
@@ -14,13 +14,15 @@ type Service struct {
 	repo    *Repository
 	wayback *wayback.WaybackClient
 	logger  *slog.Logger
+	worker  *worker.WorkerPool
 }
 
-func NewService(repo *Repository, wayback *wayback.WaybackClient, logger *slog.Logger) *Service {
+func NewService(repo *Repository, wayback *wayback.WaybackClient, logger *slog.Logger, worker *worker.WorkerPool) *Service {
 	return &Service{
 		repo:    repo,
 		wayback: wayback,
 		logger:  logger.With("component_name", componentName),
+		worker:  worker,
 	}
 }
 
@@ -80,16 +82,23 @@ func (s *Service) Insert(ctx context.Context, options CreateOptions) (Recommenda
 }
 
 func (s *Service) waybackSave(ctx context.Context, url string) {
-	//todo (OV): ideally we should also create a child span here and link with parent
-	//but since we're going to remove this im just leaving it as is for reference
-	_, correlationId := correlation.EnsureCorrelationId(ctx)
-	go func(correlationId string, url string) {
-		goctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
+	enqueueCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	err := s.worker.Enqueue(
+		enqueueCtx,
+		"wayback-save",
+		func(ctx context.Context) error {
+			return s.wayback.RequestSave(ctx, url)
+		},
+		3,
+	)
 
-		goctx = correlation.WithCorrelationId(goctx, correlationId)
-		_ = s.wayback.RequestSave(goctx, url)
-	}(correlationId, url)
+	if err != nil {
+		s.logger.ErrorContext(ctx,
+			"failed to enqueue wayback save",
+			"error", err,
+			"url", url)
+	}
 }
 
 func (s *Service) Delete(ctx context.Context, id int64) error {

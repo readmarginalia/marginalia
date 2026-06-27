@@ -19,6 +19,7 @@ import (
 	"marginalia/internal/telemetry"
 	"marginalia/internal/telemetry/logging"
 	"marginalia/internal/telemetry/tracing"
+	"marginalia/internal/worker"
 )
 
 func main() {
@@ -69,13 +70,23 @@ func run() error {
 		slog.Warn("TRUST_PROXY is enabled but TRUSTED_PROXIES is empty — all peers are trusted to set client IP headers")
 	}
 
+	workerPool := worker.NewWorkerPool(ctx, 10)
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := workerPool.Shutdown(shutdownCtx); err != nil {
+			slog.Error("failed to shutdown worker pool", "error", err)
+		}
+	}()
+
 	waybackClient, err := wayback.NewClient("https://web.archive.org", 60*time.Second, logger)
 	if err != nil {
 		slog.Error("failed to create wayback client", "error", err)
 		return err
 	}
 	repository := recommendations.NewRepository(database)
-	recommendationsService := recommendations.NewService(repository, waybackClient, logger)
+	recommendationsService := recommendations.NewService(repository, waybackClient, logger, workerPool)
 	feedService := feed.NewService(recommendationsService, logger)
 
 	app := &server.App{

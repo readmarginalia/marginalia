@@ -10,7 +10,7 @@ type CorrelationIdKey struct{}
 
 var correlationIdKey = CorrelationIdKey{}
 
-func WithCorrelationId(ctx context.Context, correlationId string) context.Context {
+func NewContext(ctx context.Context, correlationId string) context.Context {
 	return context.WithValue(ctx, correlationIdKey, correlationId)
 }
 
@@ -23,7 +23,7 @@ func EnsureCorrelationId(ctx context.Context) (context.Context, string) {
 	correlationId, ok := FromContext(ctx)
 	if !ok || correlationId == "" {
 		correlationId = createCorrelationId()
-		ctx = WithCorrelationId(ctx, correlationId)
+		ctx = NewContext(ctx, correlationId)
 	}
 	return ctx, correlationId
 }
