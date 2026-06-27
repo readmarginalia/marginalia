@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log/slog"
 	"marginalia/internal/auth"
+	"marginalia/internal/configuration"
 	"marginalia/internal/feed"
 	"marginalia/internal/infra/http"
 	"marginalia/internal/interop/wayback"
@@ -26,7 +27,7 @@ import (
 var cacheIcon string
 
 type App struct {
-	AuthConfig      *auth.AuthConfig
+	AppConfig       configuration.AppConfig
 	Database        *sql.DB
 	Owner           string
 	Theme           string
@@ -44,30 +45,18 @@ func ownerTitle(owner string) string {
 	return owner + "'s Marginalia"
 }
 
-func New(app *App) stdhttp.Handler {
-	authConfig := app.AuthConfig.WithDefaults()
+func New(app *App, middlewares ...func(stdhttp.Handler) stdhttp.Handler) stdhttp.Handler {
 	var limiter *http.FailedAuthLimiter
-	if authConfig.EnableRateLimit {
+	if app.AppConfig.AuthRateLimit {
 		limiter = http.DefaultFailedAuthLimiter()
 	}
 
 	title := ownerTitle(app.Owner)
 	r := chi.NewRouter()
-
-	r.Use(func(next stdhttp.Handler) stdhttp.Handler {
-		return stdhttp.HandlerFunc(func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-			if r.Method == stdhttp.MethodOptions {
-				w.WriteHeader(stdhttp.StatusNoContent)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	})
+	r.Use(middlewares...)
 
 	r.Group(func(r chi.Router) {
-		r.Use(auth.TokenAuth(authConfig, limiter))
+		r.Use(auth.TokenAuth(app.AppConfig, limiter))
 		r.Post("/recommend", handleAdd(app))
 		r.Delete("/recommend/{id}", handleDelete(app))
 	})
@@ -128,8 +117,7 @@ func handleRSS(app *App) stdhttp.HandlerFunc {
 		w.Header().Set("Last-Modified", result.LastModified.Format(stdhttp.TimeFormat))
 		w.Header().Set("Cache-Control", "no-store, must-revalidate")
 
-		logger := slog.Default()
-		logger.InfoContext(r.Context(), "rss request",
+		slog.InfoContext(r.Context(), "rss request",
 			"If-None-Match", r.Header.Get("If-None-Match"),
 			"If-Modified-Since", r.Header.Get("If-Modified-Since"))
 

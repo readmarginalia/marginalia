@@ -7,11 +7,11 @@ import (
 	"os"
 	"time"
 
-	"marginalia/internal/auth"
-	"marginalia/internal/common"
+	"marginalia/internal/configuration"
 	"marginalia/internal/correlation"
 	"marginalia/internal/feed"
 	"marginalia/internal/infra/db"
+	mg_http "marginalia/internal/infra/http"
 	"marginalia/internal/interop/wayback"
 	"marginalia/internal/recommendations"
 	"marginalia/internal/requestmeta"
@@ -22,109 +22,91 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
-	res, err := telemetry.BuildResource()
-	if err != nil {
-		slog.Error("failed to build resource", "error", err)
+	if err := run(); err != nil {
+		slog.Error("application failed", "error", err)
 		os.Exit(1)
+	}
+}
+
+func run() error {
+	appConfig, err := configuration.Load()
+	if err != nil {
+		slog.Error("failed to load configuration", "error", err)
+		return err
 	}
 
-	logger, shutdownLogs, err := logging.CreateLogger(ctx, res)
+	ctx := context.Background()
+	logger, shutdownTelemetry, err := telemetry.Init(ctx, appConfig)
 	if err != nil {
-		slog.Error("failed to create logger", "error", err)
-		os.Exit(1)
+		slog.Error("failed to initialize telemetry", "error", err)
+		return err
 	}
-	defer shutdownLogs(ctx)
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := shutdownTelemetry(shutdownCtx); err != nil {
+			slog.Error("failed to shutdown telemetry", "error", err)
+		}
+	}()
 
 	slog.SetDefault(logger)
 
-	shutdownTracing, err := tracing.SetupTracing(ctx, res)
-	if err != nil {
-		slog.Error("failed to setup tracing", "error", err)
-		os.Exit(1)
-	}
-	defer shutdownTracing(ctx)
-
-	token := os.Getenv("TOKEN")
-	if token == "" {
-		slog.Error("TOKEN is required")
-		os.Exit(1)
-	}
-
-	owner := os.Getenv("OWNER")
-	themeName := os.Getenv("THEME")
-
-	theme, err := server.LoadTheme(themeName)
+	theme, err := server.LoadTheme(appConfig.ThemeName)
 	if err != nil {
 		slog.Error("failed to load theme", "error", err)
-		os.Exit(1)
+		return err
 	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "9595"
-	}
-
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "data/marginalia.db"
-	}
-
-	database, err := db.Open(dbPath)
+	database, err := db.Open(appConfig.DbPath)
 	if err != nil {
 		slog.Error("failed to open database", "error", err)
-		os.Exit(1)
+		return err
 	}
 	defer database.Close()
 
-	auth := auth.AuthConfig{
-		Token:              token,
-		EnableRateLimit:    common.EnvBool("AUTH_RATE_LIMIT"),
-		TrustProxy:         common.EnvBool("TRUST_PROXY"),
-		RealIPHeaders:      common.EnvList("REAL_IP_HEADERS"),
-		TrustedProxyRanges: common.MustParseTrustedProxyRanges(common.EnvList("TRUSTED_PROXIES")),
-	}
-
-	if auth.TrustProxy && len(auth.TrustedProxyRanges) == 0 {
+	if appConfig.TrustProxy && len(appConfig.TrustedProxyRanges) == 0 {
 		slog.Warn("TRUST_PROXY is enabled but TRUSTED_PROXIES is empty — all peers are trusted to set client IP headers")
 	}
 
 	waybackClient, err := wayback.NewClient("https://web.archive.org", 60*time.Second, logger)
 	if err != nil {
 		slog.Error("failed to create wayback client", "error", err)
-		os.Exit(1)
+		return err
 	}
 	repository := recommendations.NewRepository(database)
 	recommendationsService := recommendations.NewService(repository, waybackClient, logger)
 	feedService := feed.NewService(recommendationsService, logger)
 
 	app := &server.App{
-		AuthConfig:      &auth,
+		AppConfig:       appConfig,
 		Database:        database,
-		Owner:           owner,
+		Owner:           appConfig.Owner,
 		Theme:           theme,
 		Feed:            feedService,
 		Recommendations: recommendationsService,
 	}
 
-	appHandler := tracing.AddTraceContext(
-		correlation.AddCorrelationId(
-			requestmeta.AddRequestMetadata(
-				logging.AddRequestLogging(
-					server.New(app),
-				),
-			),
-		),
-	)
+	middlewares := []func(http.Handler) http.Handler{
+		tracing.AddTraceContext,
+		correlation.AddCorrelationId,
+		requestmeta.AddRequestMetadata(appConfig),
+		logging.AddRequestLogging,
+		mg_http.AddCors,
+	}
+
+	appHandler := server.New(app, middlewares...)
 
 	slog.Info("marginalia listening",
-		"port", port,
-		"rate_limit", auth.EnableRateLimit,
-		"trust_proxy", auth.TrustProxy)
+		"port", appConfig.Port,
+		"rate_limit", appConfig.AuthRateLimit,
+		"trust_proxy", appConfig.TrustProxy)
 
-	err = http.ListenAndServe(":"+port, appHandler)
+	err = http.ListenAndServe(":"+appConfig.Port, appHandler)
 	if err != nil {
-		slog.Error("server stopped", "err", err, "port", port)
-		os.Exit(1)
+		slog.Error("server stopped", "err", err, "port", appConfig.Port)
+		return err
 	}
+
+	return nil
 }

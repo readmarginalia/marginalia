@@ -2,7 +2,7 @@ package tracing
 
 import (
 	"context"
-	"os"
+	"marginalia/internal/configuration"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -11,9 +11,16 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
-func SetupTracing(ctx context.Context, res *resource.Resource) (func(context.Context) error, error) {
+func SetupTracing(ctx context.Context, res *resource.Resource, config configuration.AppConfig) (func(context.Context) error, error) {
+
+	shutdown := func(context.Context) error { return nil }
+
+	if config.OtelEndpoint == "" {
+		return shutdown, nil
+	}
+
 	exporter, err := otlptracehttp.New(ctx,
-		otlptracehttp.WithEndpoint(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")),
+		otlptracehttp.WithEndpoint(config.OtelEndpoint),
 		otlptracehttp.WithInsecure(),
 	)
 	if err != nil {

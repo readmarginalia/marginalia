@@ -1,11 +1,13 @@
 package http
 
 import (
+	"log/slog"
+	"marginalia/internal/configuration"
 	"net/netip"
 	"strings"
-)
 
-var DefaultRealIPHeaders = []string{"CF-Connecting-IP", "True-Client-IP", "X-Real-IP", "X-Forwarded-For"}
+	stdhttp "net/http"
+)
 
 func RemoteHost(remoteAddr string) netip.Addr {
 	host := strings.TrimSpace(remoteAddr)
@@ -49,4 +51,36 @@ func IsTrustedIP(addr netip.Addr, prefixes []netip.Prefix) bool {
 		}
 	}
 	return false
+}
+
+func ClientIdentity(r *stdhttp.Request, cfg configuration.AppConfig) (string, bool) {
+	peer := RemoteHost(r.RemoteAddr)
+	if usesTrustedProxy(peer, cfg) {
+		for _, header := range cfg.RealIPHeaders {
+			if clientIP := ForwardedClientIP(header, r.Header.Get(header), cfg.TrustedProxyRanges); clientIP.IsValid() {
+				return clientIP.String(), true
+			}
+		}
+
+		slog.WarnContext(r.Context(),
+			"request from trusted proxy without valid client IP in headers, falling back to peer address",
+			"remote_addr", r.RemoteAddr,
+			"headers_checked", cfg.RealIPHeaders,
+		)
+
+	}
+	if peer.IsValid() {
+		return peer.String(), false
+	}
+	return strings.TrimSpace(r.RemoteAddr), false
+}
+
+func usesTrustedProxy(peer netip.Addr, cfg configuration.AppConfig) bool {
+	if !cfg.TrustProxy {
+		return false
+	}
+	if len(cfg.TrustedProxyRanges) == 0 {
+		return true
+	}
+	return IsTrustedIP(peer, cfg.TrustedProxyRanges)
 }
