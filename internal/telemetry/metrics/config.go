@@ -5,6 +5,7 @@ import (
 	"marginalia/internal/configuration"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/sdk/metric"
@@ -30,6 +31,7 @@ func SetupMetrics(ctx context.Context, res *resource.Resource, config configurat
 	reader := metric.NewPeriodicReader(
 		exporter,
 		metric.WithInterval(15*time.Second),
+		metric.WithProducer(runtime.NewProducer()),
 	)
 
 	provider := metric.NewMeterProvider(
@@ -38,6 +40,13 @@ func SetupMetrics(ctx context.Context, res *resource.Resource, config configurat
 	)
 
 	otel.SetMeterProvider(provider)
+
+	if err := runtime.Start(
+		runtime.WithMeterProvider(provider),
+	); err != nil {
+		_ = provider.Shutdown(ctx)
+		return nil, err
+	}
 
 	return provider.Shutdown, nil
 }
