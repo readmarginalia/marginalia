@@ -70,7 +70,8 @@ func run() error {
 		slog.Warn("TRUST_PROXY is enabled but TRUSTED_PROXIES is empty — all peers are trusted to set client IP headers")
 	}
 
-	workerPool := worker.NewWorkerPool(ctx, 10)
+	workerPool := worker.NewWorkerPool(10, 100)
+	workerPool.Start(ctx)
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

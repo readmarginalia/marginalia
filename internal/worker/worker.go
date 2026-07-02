@@ -23,30 +23,49 @@ type Job struct {
 }
 
 type WorkerPool struct {
-	jobs chan Job
+	jobs     chan Job
+	poolSize int
 
-	runCtx context.Context
 	cancel context.CancelFunc
 
 	wg       sync.WaitGroup
 	mu       sync.RWMutex
+	started  bool
 	stopping bool
 }
 
-func NewWorkerPool(ctx context.Context, poolSize int) *WorkerPool {
-	runCtx, cancel := context.WithCancel(ctx)
-
+func NewWorkerPool(poolSize int, queueSize int) *WorkerPool {
 	wp := &WorkerPool{
-		jobs:   make(chan Job, 100),
-		runCtx: runCtx,
-		cancel: cancel,
-	}
-
-	for range poolSize {
-		wp.wg.Go(wp.workerLoop)
+		jobs:     make(chan Job, queueSize),
+		poolSize: poolSize,
 	}
 
 	return wp
+}
+
+func (wp *WorkerPool) Start(ctx context.Context) error {
+	wp.mu.Lock()
+	defer wp.mu.Unlock()
+
+	if wp.stopping {
+		return ErrWorkerStopped
+	}
+
+	if wp.started {
+		return nil
+	}
+
+	runCtx, cancel := context.WithCancel(ctx)
+	wp.cancel = cancel
+	wp.started = true
+
+	for range wp.poolSize {
+		wp.wg.Go(func() {
+			wp.workerLoop(runCtx)
+		})
+	}
+
+	return nil
 }
 
 func (wp *WorkerPool) Enqueue(ctx context.Context, name string, handler JobHandler, maxAttempts int) error {
@@ -74,15 +93,13 @@ func (wp *WorkerPool) Enqueue(ctx context.Context, name string, handler JobHandl
 	wp.mu.RLock()
 	defer wp.mu.RUnlock()
 
-	if wp.stopping {
+	if wp.stopping || !wp.started {
 		return ErrWorkerStopped
 	}
 
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-wp.runCtx.Done():
-		return ErrWorkerStopped
 	case wp.jobs <- job:
 		slog.InfoContext(ctx, "job enqueued",
 			"job_name", job.Name,
@@ -113,28 +130,21 @@ func (wp *WorkerPool) Shutdown(ctx context.Context) error {
 	case <-done:
 		return nil
 	case <-ctx.Done():
-		wp.cancel()
+		if wp.cancel != nil {
+			wp.cancel()
+		}
 		return ctx.Err()
 	}
 }
 
-func (wp *WorkerPool) workerLoop() {
-	for {
-		select {
-		case <-wp.runCtx.Done():
-			return
-		case job, ok := <-wp.jobs:
-			if !ok {
-				return
-			}
-
-			wp.execute(job)
-		}
+func (wp *WorkerPool) workerLoop(ctx context.Context) {
+	for job := range wp.jobs {
+		wp.execute(ctx, job)
 	}
 }
 
-func (wp *WorkerPool) execute(job Job) {
-	ctx := wp.jobContext(job)
+func (wp *WorkerPool) execute(ctx context.Context, job Job) {
+	ctx = wp.jobContext(ctx, job)
 	for attempt := 1; attempt <= job.MaxAttempts; attempt++ {
 		start := time.Now()
 		err := job.Handler(ctx)
@@ -176,7 +186,7 @@ func (wp *WorkerPool) execute(job Job) {
 		timer := time.NewTimer(delay)
 
 		select {
-		case <-wp.runCtx.Done():
+		case <-ctx.Done():
 			timer.Stop()
 			return
 		case <-timer.C:
@@ -201,9 +211,7 @@ func retryDelay(attempt int) time.Duration {
 	return delay
 }
 
-func (wp *WorkerPool) jobContext(job Job) context.Context {
-	ctx := wp.runCtx
-
+func (wp *WorkerPool) jobContext(ctx context.Context, job Job) context.Context {
 	if job.CorrelationId != "" {
 		ctx = correlation.NewContext(ctx, job.CorrelationId)
 	}
