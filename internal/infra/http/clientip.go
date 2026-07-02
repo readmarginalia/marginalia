@@ -1,7 +1,6 @@
 package http
 
 import (
-	"log/slog"
 	"marginalia/internal/configuration"
 	"net/netip"
 	"strings"
@@ -53,7 +52,7 @@ func IsTrustedIP(addr netip.Addr, prefixes []netip.Prefix) bool {
 	return false
 }
 
-func ClientIdentity(r *stdhttp.Request, cfg configuration.AppConfig) (string, bool) {
+func ClientIdentity(r *stdhttp.Request, cfg configuration.AppConfig) (identity string, proxied bool) {
 	peer := RemoteHost(r.RemoteAddr)
 	if usesTrustedProxy(peer, cfg) {
 		for _, header := range cfg.RealIPHeaders {
@@ -61,13 +60,6 @@ func ClientIdentity(r *stdhttp.Request, cfg configuration.AppConfig) (string, bo
 				return clientIP.String(), true
 			}
 		}
-
-		slog.WarnContext(r.Context(),
-			"request from trusted proxy without valid client IP in headers, falling back to peer address",
-			"remote_addr", r.RemoteAddr,
-			"headers_checked", cfg.RealIPHeaders,
-		)
-
 	}
 	if peer.IsValid() {
 		return peer.String(), false

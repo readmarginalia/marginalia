@@ -13,7 +13,7 @@ func AddCorrelationId(next http.Handler) http.Handler {
 			correlationId = createCorrelationId()
 		}
 
-		ctx := WithCorrelationId(r.Context(), correlationId)
+		ctx := NewContext(r.Context(), correlationId)
 		r = r.WithContext(ctx)
 
 		w.Header().Set(headerName, correlationId)
