@@ -16,9 +16,8 @@ func AddRequestLogging(next http.Handler) http.Handler {
 
 		ww := chimw.NewWrapResponseWriter(w, r.ProtoMajor)
 
-		logger := slog.Default()
 		ctx := r.Context()
-		logger.InfoContext(ctx, fmt.Sprintf("request starting: %s: %s ", r.Method, r.URL.Path))
+		slog.InfoContext(ctx, fmt.Sprintf("request starting: %s: %s ", r.Method, r.URL.Path))
 
 		next.ServeHTTP(ww, r)
 
@@ -26,7 +25,7 @@ func AddRequestLogging(next http.Handler) http.Handler {
 		status := ww.Status()
 		size := ww.BytesWritten()
 
-		logger.InfoContext(ctx, fmt.Sprintf("request completed in %vms, Status: %d", duration.Milliseconds(), status),
+		slog.InfoContext(ctx, fmt.Sprintf("request completed in %vms, Status: %d", duration.Milliseconds(), status),
 			"status", status,
 			"request.duration", duration.Milliseconds(),
 			"response.size.bytes", size,
