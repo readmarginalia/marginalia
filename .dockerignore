@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+.vscode/
+*.txt
+*.md
+__debug_bin*
+data/
+telemetry/
+server/
+docker-compose.yml
